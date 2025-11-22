@@ -142,7 +142,7 @@ export class ProjectService {
       project.workspaceId,
     );
 
-    if (role !== 'ADMIN') {
+    if (role !== 'admin') {
       throw new ForbiddenException('Only admins can delete projects');
     }
 

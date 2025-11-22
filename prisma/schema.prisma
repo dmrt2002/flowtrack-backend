@@ -1,99 +1,887 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// =============================================================================
+// FlowTrack Database Schema
+// =============================================================================
+// Generated: 2025-01-22
+// Database: PostgreSQL
+// ORM: Prisma
+// Total Models: 25
+// =============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [citext]
 }
 
-// 1. User Model: Managed by Clerk or your auth provider.
-// We only store the reference ID.
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum WorkspaceMemberRole {
+  owner
+  admin
+  member
+  viewer
+
+  @@map("workspace_member_role")
+}
+
+enum OAuthProviderType {
+  GOOGLE_EMAIL
+  OUTLOOK_EMAIL
+  CALENDLY
+
+  @@map("oauth_provider_type")
+}
+
+enum WorkflowStatus {
+  draft
+  active
+  paused
+  archived
+
+  @@map("workflow_status")
+}
+
+enum NodeCategory {
+  trigger
+  action
+  logic
+  utility
+
+  @@map("node_category")
+}
+
+enum FieldType {
+  TEXT
+  EMAIL
+  TEXTAREA
+  DROPDOWN
+  NUMBER
+  DATE
+  CHECKBOX
+
+  @@map("field_type")
+}
+
+enum LeadSource {
+  FORM
+  EMAIL_FORWARD
+  API
+  MANUAL
+  IMPORT
+
+  @@map("lead_source")
+}
+
+enum LeadEventCategory {
+  activity
+  system
+  communication
+  automation
+
+  @@map("lead_event_category")
+}
+
+enum WorkflowExecutionStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+  paused
+
+  @@map("workflow_execution_status")
+}
+
+enum ExecutionStepStatus {
+  pending
+  running
+  completed
+  failed
+  skipped
+
+  @@map("execution_step_status")
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+
+  @@map("log_level")
+}
+
+enum SubscriptionStatus {
+  trial
+  active
+  past_due
+  cancelled
+  expired
+
+  @@map("subscription_status")
+}
+
+enum BillingCycle {
+  monthly
+  yearly
+
+  @@map("billing_cycle")
+}
+
+enum UsageEventCategory {
+  compute
+  communication
+  storage
+  api
+
+  @@map("usage_event_category")
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+  cancelled
+
+  @@map("webhook_delivery_status")
+}
+
+enum AuthProvider {
+  clerk
+  local
+
+  @@map("auth_provider")
+}
+
+// =============================================================================
+// MODULE 1: IDENTITY & ACCESS MANAGEMENT
+// =============================================================================
+
+/// Core user identity supporting both Clerk and native authentication
 model User {
-  id        String @id @default(cuid())
-  // The unique ID from your auth provider (e.g., Clerk)
-  authId    String @unique
-  email     String @unique
-  name      String?
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clerkUserId       String?      @unique @map("clerk_user_id") @db.VarChar(255)
+  email             String       @unique @db.Citext
+  firstName         String?      @map("first_name") @db.VarChar(100)
+  lastName          String?      @map("last_name") @db.VarChar(100)
+  avatarUrl         String?      @map("avatar_url") @db.Text
+  authProvider      AuthProvider @default(local) @map("auth_provider")
+  passwordHash      String?      @map("password_hash") @db.VarChar(255)
+  passwordChangedAt DateTime?    @map("password_changed_at") @db.Timestamp()
+  emailVerificationToken  String?   @unique @map("email_verification_token") @db.VarChar(255)
+  emailVerificationExpiry DateTime? @map("email_verification_expiry") @db.Timestamp()
+  isActive          Boolean      @default(true) @map("is_active")
+  emailVerifiedAt   DateTime?    @map("email_verified_at") @db.Timestamp()
+  deletedAt         DateTime?    @map("deleted_at") @db.Timestamp()
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamp()
 
-  // The user's role in various workspaces
-  memberships Membership[]
+  // Relations
+  ownedWorkspaces      Workspace[]
+  workspaceMemberships WorkspaceMember[]
+  invitedMemberships   WorkspaceMember[]     @relation("InvitedBy")
+  assignedLeads        Lead[]
+  triggeredLeadEvents  LeadEvent[]
+  passwordResetTokens  PasswordResetToken[]
+  refreshTokens        RefreshToken[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  @@index([clerkUserId], map: "idx_users_clerk_id")  // TODO: Add partial index WHERE deleted_at IS NULL in migration
+  @@index([email], map: "idx_users_email")  // TODO: Add partial index WHERE deleted_at IS NULL in migration
+  @@index([emailVerificationToken], map: "idx_users_email_verification_token")  // TODO: Add partial index WHERE email_verification_token IS NOT NULL in migration
+  @@index([authProvider], map: "idx_users_auth_provider")
   @@map("users")
 }
 
-// 2. Workspace Model: The top-level "tenant" or "organization"
+/// Multi-tenant workspace container for all user data
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique // For URLs
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String    @db.VarChar(100)
+  slug           String    @unique @db.VarChar(50)
+  intakeEmailId  String    @unique @map("intake_email_id") @db.VarChar(50)
+  ownerUserId    String    @map("owner_user_id") @db.Uuid
+  timezone       String    @default("UTC") @db.VarChar(50)
+  settings       Json      @default("{}") @db.JsonB
+  isActive       Boolean   @default(true) @map("is_active")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamp()
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamp()
 
-  // The users who belong to this workspace
-  members   Membership[]
-  // The core resources belonging to this workspace
-  projects  Project[]
+  // Relations
+  owner                User                  @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  members              WorkspaceMember[]
+  projects              Project[]
+  oauthCredentials     OAuthCredential[]
+  workflows            Workflow[]
+  leads                Lead[]
+  workflowExecutions   WorkflowExecution[]
+  usageQuotas          UsageQuota[]
+  usageEvents          UsageEvent[]
+  webhookEndpoints     WebhookEndpoint[]
+  workspaceDailyStats  WorkspaceDailyStat[]
+  subscriptions        Subscription[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  @@index([ownerUserId], map: "idx_workspaces_owner")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([slug], map: "idx_workspaces_slug")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([intakeEmailId], map: "idx_workspaces_intake_email")
   @@map("workspaces")
 }
 
-// 3. Membership Model: The join table between User and Workspace
-// This is critical for managing roles and permissions.
-model Membership {
-  id          String   @id @default(cuid())
-  role        String   // e.g., "ADMIN", "MEMBER", "BILLING"
+/// Team membership for multi-user workspaces
+model WorkspaceMember {
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String              @map("workspace_id") @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  role            WorkspaceMemberRole @default(member)
+  permissions     Json                @default("{}") @db.JsonB
+  invitedByUserId String?             @map("invited_by_user_id") @db.Uuid
+  invitedAt       DateTime?           @map("invited_at") @db.Timestamp()
+  joinedAt        DateTime?           @map("joined_at") @db.Timestamp()
+  isActive        Boolean             @default(true) @map("is_active")
+  deletedAt       DateTime?           @map("deleted_at") @db.Timestamp()
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamp()
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-
+  // Relations
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy   User?     @relation("InvitedBy", fields: [invitedByUserId], references: [id])
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  @@unique([userId, workspaceId]) // A user can only join a workspace once
-  @@map("memberships")
+  @@unique([workspaceId, userId], map: "workspace_members_unique_user_workspace")
+  @@index([workspaceId], map: "idx_workspace_members_workspace")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([userId], map: "idx_workspace_members_user")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@map("workspace_members")
 }
 
-// 4. Project Model: A generic "resource" owned by a workspace.
-// This could be "Documents", "Posts", "Products", etc.
+/// Project model for workspace project management
 model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String    @db.VarChar(150)
+  description String?   @db.Text
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamp()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp()
 
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tasks     Task[]
 
-  // A project can have sub-resources
-  tasks       Task[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  @@index([workspaceId], map: "idx_projects_workspace")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
   @@map("projects")
 }
 
-// 5. Task Model: A generic "sub-resource"
+/// Task model for project task management
 model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  isComplete  Boolean  @default(false)
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  title       String    @db.VarChar(200)
+  description String?   @db.Text
+  isComplete  Boolean   @default(false) @map("is_complete")
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamp()
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp()
 
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectId   String
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
+  @@index([projectId], map: "idx_tasks_project")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
   @@map("tasks")
+}
+
+/// Store encrypted OAuth tokens for third-party integrations
+model OAuthCredential {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId     String             @map("workspace_id") @db.Uuid
+  providerType    OAuthProviderType  @map("provider_type")
+  providerUserId  String?            @map("provider_user_id") @db.VarChar(255)
+  providerEmail   String?            @map("provider_email") @db.Citext
+  accessToken     String             @map("access_token") @db.Text
+  refreshToken    String?            @map("refresh_token") @db.Text
+  tokenType       String             @default("Bearer") @map("token_type") @db.VarChar(20)
+  expiresAt       DateTime?          @map("expires_at") @db.Timestamp()
+  scope           String?            @db.Text
+  metadata        Json               @default("{}") @db.JsonB
+  isActive        Boolean            @default(true) @map("is_active")
+  lastUsedAt      DateTime?          @map("last_used_at") @db.Timestamp()
+  deletedAt       DateTime?          @map("deleted_at") @db.Timestamp()
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, providerType], map: "oauth_credentials_unique_workspace_provider")
+  @@index([workspaceId], map: "idx_oauth_credentials_workspace")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([providerType, providerEmail], map: "idx_oauth_credentials_provider")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([expiresAt], map: "idx_oauth_credentials_expiry")  // TODO: Add partial index WHERE is_active = true in migration)
+  @@map("oauth_credentials")
+}
+
+// =============================================================================
+// MODULE 2: WORKFLOW ORCHESTRATION
+// =============================================================================
+
+/// Top-level automation workflow container
+model Workflow {
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String         @map("workspace_id") @db.Uuid
+  name                  String         @db.VarChar(150)
+  description           String?        @db.Text
+  templateId            String?        @map("template_id") @db.VarChar(100)
+  templateVersion       Int?           @map("template_version")
+  bookingUrl            String?        @map("booking_url") @db.Text
+  status                WorkflowStatus @default(draft)
+  version               Int            @default(1)
+  settings              Json           @default("{}") @db.JsonB
+  totalExecutions       Int            @default(0) @map("total_executions")
+  successfulExecutions  Int            @default(0) @map("successful_executions")
+  failedExecutions      Int            @default(0) @map("failed_executions")
+  lastExecutedAt        DateTime?      @map("last_executed_at") @db.Timestamp()
+  deletedAt             DateTime?      @map("deleted_at") @db.Timestamp()
+  createdAt             DateTime       @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt             DateTime       @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  nodes              WorkflowNode[]
+  edges              WorkflowEdge[]
+  formFields         FormField[]
+  leads              Lead[]
+  workflowExecutions WorkflowExecution[]
+
+  @@index([workspaceId, status], map: "idx_workflows_workspace")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([status], map: "idx_workflows_status")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([templateId, templateVersion], map: "idx_workflows_template")
+  @@map("workflows")
+}
+
+/// Individual nodes in the workflow graph (React Flow nodes)
+model WorkflowNode {
+  id               String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId       String        @map("workflow_id") @db.Uuid
+  reactFlowNodeId  String        @map("react_flow_node_id") @db.VarChar(100)
+  nodeType         String        @map("node_type") @db.VarChar(50)
+  nodeCategory     NodeCategory  @map("node_category")
+  positionX        Decimal       @default(0) @map("position_x") @db.Decimal(10, 2)
+  positionY        Decimal       @default(0) @map("position_y") @db.Decimal(10, 2)
+  config           Json          @default("{}") @db.JsonB
+  isEnabled        Boolean       @default(true) @map("is_enabled")
+  executionOrder   Int?          @map("execution_order")
+  deletedAt        DateTime?     @map("deleted_at") @db.Timestamp()
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workflow                  Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  executionSteps            ExecutionStep[]
+  triggeredWorkflowExecutions WorkflowExecution[]
+
+  @@unique([workflowId, reactFlowNodeId], map: "workflow_nodes_unique_react_flow_id")
+  @@index([workflowId], map: "idx_workflow_nodes_workflow")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([nodeType], map: "idx_workflow_nodes_type")
+  @@index([nodeCategory], map: "idx_workflow_nodes_category")
+  @@index([config(ops: JsonbPathOps)], type: Gin, map: "idx_workflow_nodes_config")
+  @@map("workflow_nodes")
+}
+
+/// Connections between workflow nodes (directed graph edges)
+model WorkflowEdge {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId      String    @map("workflow_id") @db.Uuid
+  reactFlowEdgeId String    @map("react_flow_edge_id") @db.VarChar(100)
+  sourceNodeId    String    @map("source_node_id") @db.VarChar(100)
+  targetNodeId    String    @map("target_node_id") @db.VarChar(100)
+  sourceHandle    String?   @map("source_handle") @db.VarChar(50)
+  targetHandle    String?   @map("target_handle") @db.VarChar(50)
+  edgeType        String    @default("default") @map("edge_type") @db.VarChar(20)
+  label           String?   @db.VarChar(100)
+  condition       Json?     @db.JsonB
+  isEnabled       Boolean   @default(true) @map("is_enabled")
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamp()
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, sourceNodeId, targetNodeId, sourceHandle, targetHandle], map: "workflow_edges_unique_connection")
+  @@index([workflowId], map: "idx_workflow_edges_workflow")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([sourceNodeId], map: "idx_workflow_edges_source")
+  @@index([targetNodeId], map: "idx_workflow_edges_target")
+  @@index([condition(ops: JsonbPathOps)], type: Gin, map: "idx_workflow_edges_condition")
+  @@map("workflow_edges")
+}
+
+/// Public intake form field definitions
+model FormField {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId      String     @map("workflow_id") @db.Uuid
+  fieldKey        String     @map("field_key") @db.VarChar(50)
+  label           String     @db.VarChar(150)
+  fieldType       FieldType  @map("field_type")
+  options         Json?      @db.JsonB
+  placeholder     String?    @db.VarChar(255)
+  helpText        String?    @map("help_text") @db.Text
+  isRequired      Boolean    @default(true) @map("is_required")
+  validationRules Json?      @map("validation_rules") @db.JsonB
+  displayOrder    Int        @default(0) @map("display_order")
+  isActive        Boolean    @default(true) @map("is_active")
+  deletedAt       DateTime?  @map("deleted_at") @db.Timestamp()
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workflow       Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  leadFieldData  LeadFieldData[]
+
+  @@unique([workflowId, fieldKey], map: "form_fields_unique_key_per_workflow")
+  @@index([workflowId, displayOrder], map: "idx_form_fields_workflow")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@map("form_fields")
+}
+
+// =============================================================================
+// MODULE 3: LEADS & DATA MANAGEMENT
+// =============================================================================
+
+/// Contact/prospect records captured through workflows
+model Lead {
+  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId         String      @map("workflow_id") @db.Uuid
+  workspaceId        String      @map("workspace_id") @db.Uuid
+  email              String      @db.Citext
+  name               String?     @db.VarChar(150)
+  companyName        String?     @map("company_name") @db.VarChar(150)
+  phone              String?     @db.VarChar(50)
+  status             String      @default("NEW") @db.VarChar(50)
+  source             LeadSource
+  sourceMetadata     Json?       @map("source_metadata") @db.JsonB
+  assignedToUserId   String?     @map("assigned_to_user_id") @db.Uuid
+  score              Int         @default(0)
+  tags               String[]
+  lastActivityAt     DateTime?   @map("last_activity_at") @db.Timestamp()
+  lastEmailSentAt    DateTime?   @map("last_email_sent_at") @db.Timestamp()
+  lastEmailOpenedAt  DateTime?   @map("last_email_opened_at") @db.Timestamp()
+  deletedAt          DateTime?   @map("deleted_at") @db.Timestamp()
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workflow           Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  assignedTo         User?               @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  fieldData          LeadFieldData[]
+  events             LeadEvent[]
+  workflowExecutions WorkflowExecution[]
+
+  @@unique([workflowId, email], map: "leads_unique_email_per_workflow")
+  @@index([workflowId, status], map: "idx_leads_workflow")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([workspaceId], map: "idx_leads_workspace")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([email], map: "idx_leads_email")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([status], map: "idx_leads_status")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([assignedToUserId], map: "idx_leads_assigned")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([createdAt(sort: Desc)], map: "idx_leads_created")
+  @@index([tags(ops: ArrayOps)], type: Gin, map: "idx_leads_tags")
+  @@map("leads")
+}
+
+/// Store custom form field responses (EAV pattern)
+model LeadFieldData {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId      String   @map("lead_id") @db.Uuid
+  formFieldId String   @map("form_field_id") @db.Uuid
+  value       String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  formField FormField @relation(fields: [formFieldId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, formFieldId], map: "lead_field_data_unique_lead_field")
+  @@index([leadId], map: "idx_lead_field_data_lead")
+  @@index([formFieldId], map: "idx_lead_field_data_field")
+  @@map("lead_field_data")
+}
+
+/// Immutable audit trail of all lead activities
+model LeadEvent {
+  id                            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  leadId                        String             @map("lead_id") @db.Uuid
+  eventType                     String             @map("event_type") @db.VarChar(50)
+  eventCategory                 LeadEventCategory  @default(activity) @map("event_category")
+  description                   String?            @db.Text
+  metadata                      Json?              @db.JsonB
+  triggeredByUserId             String?            @map("triggered_by_user_id") @db.Uuid
+  triggeredByWorkflowExecutionId String?           @map("triggered_by_workflow_execution_id") @db.Uuid
+  createdAt                     DateTime           @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  lead          Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  triggeredBy   User? @relation(fields: [triggeredByUserId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt(sort: Desc)], map: "idx_lead_events_lead")
+  @@index([eventType], map: "idx_lead_events_type")
+  @@index([createdAt(sort: Desc)], map: "idx_lead_events_created")
+  @@map("lead_events")
+}
+
+// =============================================================================
+// MODULE 4: EXECUTION ENGINE
+// =============================================================================
+
+/// Top-level workflow run tracking
+model WorkflowExecution {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId      String                   @map("workflow_id") @db.Uuid
+  workspaceId     String                   @map("workspace_id") @db.Uuid
+  leadId          String?                  @map("lead_id") @db.Uuid
+  executionNumber BigInt                   @default(autoincrement()) @map("execution_number")
+  idempotencyKey  String?                  @map("idempotency_key") @db.VarChar(255)
+  triggerType     String                   @map("trigger_type") @db.VarChar(50)
+  triggerNodeId   String?                  @map("trigger_node_id") @db.Uuid
+  triggerData     Json?                    @map("trigger_data") @db.JsonB
+  status          WorkflowExecutionStatus  @default(running)
+  startedAt       DateTime?                @map("started_at") @db.Timestamp()
+  completedAt     DateTime?                @map("completed_at") @db.Timestamp()
+  durationMs      Int?                     @map("duration_ms")
+  errorMessage    String?                  @map("error_message") @db.Text
+  errorDetails    Json?                    @map("error_details") @db.JsonB
+  retryCount      Int                      @default(0) @map("retry_count")
+  maxRetries      Int                      @default(3) @map("max_retries")
+  lockAcquiredAt  DateTime?                @map("lock_acquired_at") @db.Timestamp()
+  lockReleasedAt  DateTime?                @map("lock_released_at") @db.Timestamp()
+  outputData      Json?                    @map("output_data") @db.JsonB
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt       DateTime                 @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workflow       Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead           Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  triggerNode    WorkflowNode?   @relation(fields: [triggerNodeId], references: [id], onDelete: SetNull)
+  executionSteps ExecutionStep[]
+  executionLogs  ExecutionLog[]
+
+  @@unique([workflowId, idempotencyKey], map: "workflow_executions_unique_idempotency")
+  @@index([workflowId, status, createdAt(sort: Desc)], map: "idx_workflow_executions_workflow")
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_workflow_executions_workspace")
+  @@index([leadId], map: "idx_workflow_executions_lead")  // TODO: Add partial index WHERE lead_id IS NOT NULL in migration)
+  @@index([status], map: "idx_workflow_executions_status")  // TODO: Add partial index WHERE status IN ('queued', 'running') in migration)
+  @@index([idempotencyKey], map: "idx_workflow_executions_idempotency")  // TODO: Add partial index WHERE idempotency_key IS NOT NULL in migration)
+  @@index([createdAt(sort: Desc)], map: "idx_workflow_executions_created")
+  @@map("workflow_executions")
+}
+
+/// Individual node executions within a workflow run
+model ExecutionStep {
+  id             String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  executionId    String               @map("execution_id") @db.Uuid
+  workflowNodeId String               @map("workflow_node_id") @db.Uuid
+  stepNumber     Int                  @map("step_number")
+  status         ExecutionStepStatus  @default(pending)
+  startedAt      DateTime?            @map("started_at") @db.Timestamp()
+  completedAt    DateTime?            @map("completed_at") @db.Timestamp()
+  durationMs     Int?                 @map("duration_ms")
+  inputData      Json?                @map("input_data") @db.JsonB
+  outputData     Json?                @map("output_data") @db.JsonB
+  errorMessage   String?              @map("error_message") @db.Text
+  errorDetails   Json?                @map("error_details") @db.JsonB
+  retryCount     Int                  @default(0) @map("retry_count")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  execution    WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  workflowNode WorkflowNode      @relation(fields: [workflowNodeId], references: [id], onDelete: Cascade)
+
+  @@index([executionId, stepNumber], map: "idx_execution_steps_execution")
+  @@index([workflowNodeId], map: "idx_execution_steps_node")
+  @@index([status], map: "idx_execution_steps_status")  // TODO: Add partial index WHERE status = 'running' in migration)
+  @@map("execution_steps")
+}
+
+// NOTE: This table requires manual partitioning via raw SQL migration
+// Partition by RANGE (created_at) - see migration file for implementation
+/// High-volume detailed logging for workflow executions (PARTITIONED)
+model ExecutionLog {
+  id               String    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  executionId      String    @map("execution_id") @db.Uuid
+  executionStepId  String?   @map("execution_step_id") @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  logLevel         LogLevel  @map("log_level")
+  logCategory      String?   @map("log_category") @db.VarChar(50)
+  message          String    @db.Text
+  details          Json?     @db.JsonB
+  nodeType         String?   @map("node_type") @db.VarChar(50)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  execution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@id([id, createdAt])
+  @@index([executionId, createdAt(sort: Desc)], map: "idx_execution_logs_execution")
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_execution_logs_workspace")
+  @@index([logLevel], map: "idx_execution_logs_level")  // TODO: Add partial index WHERE log_level IN ('ERROR', 'WARN') in migration)
+  @@index([logCategory], map: "idx_execution_logs_category")
+  @@map("execution_logs")
+}
+
+// =============================================================================
+// MODULE 5: BILLING & USAGE TRACKING
+// =============================================================================
+
+/// Define product tiers and pricing
+model SubscriptionPlan {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String    @unique @db.VarChar(100)
+  slug              String    @unique @db.VarChar(50)
+  description       String?   @db.Text
+  priceMonthllyCents Int?     @map("price_monthly_cents")
+  priceYearlyCents  Int?      @map("price_yearly_cents")
+  currency          String    @default("USD") @db.VarChar(3)
+  quotas            Json      @db.JsonB
+  features          Json?     @db.JsonB
+  displayOrder      Int       @default(0) @map("display_order")
+  isActive          Boolean   @default(true) @map("is_active")
+  isVisible         Boolean   @default(true) @map("is_visible")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  subscriptions Subscription[]
+
+  @@index([isActive, displayOrder], map: "idx_subscription_plans_active")
+  @@map("subscription_plans")
+}
+
+/// Workspace subscription tracking
+model Subscription {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId          String             @map("workspace_id") @db.Uuid
+  subscriptionPlanId   String             @map("subscription_plan_id") @db.Uuid
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id") @db.VarChar(255)
+  stripeCustomerId     String?            @map("stripe_customer_id") @db.VarChar(255)
+  status               SubscriptionStatus @default(active)
+  billingCycle         BillingCycle       @map("billing_cycle")
+  trialStartDate       DateTime?          @map("trial_start_date") @db.Date
+  trialEndDate         DateTime?          @map("trial_end_date") @db.Date
+  currentPeriodStart   DateTime           @map("current_period_start") @db.Date
+  currentPeriodEnd     DateTime           @map("current_period_end") @db.Date
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  cancelledAt          DateTime?          @map("cancelled_at") @db.Timestamp()
+  metadata             Json?              @db.JsonB
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace        Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subscriptionPlan SubscriptionPlan @relation(fields: [subscriptionPlanId], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId], map: "idx_subscriptions_workspace")
+  @@index([status], map: "idx_subscriptions_status")  // TODO: Add partial index WHERE status = 'active' in migration)
+  @@index([stripeSubscriptionId], map: "idx_subscriptions_stripe")  // TODO: Add partial index WHERE stripe_subscription_id IS NOT NULL in migration)
+  @@map("subscriptions")
+}
+
+/// Current billing period usage tracking
+model UsageQuota {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  quotaKey     String    @map("quota_key") @db.VarChar(50)
+  quotaLimit   Int       @map("quota_limit")
+  quotaUsed    Int       @default(0) @map("quota_used")
+  periodStart  DateTime  @map("period_start") @db.Date
+  periodEnd    DateTime  @map("period_end") @db.Date
+  lastResetAt  DateTime? @map("last_reset_at") @db.Timestamp()
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, quotaKey, periodStart], map: "usage_quotas_unique_workspace_key_period")
+  @@index([workspaceId, quotaKey], map: "idx_usage_quotas_workspace")
+  @@index([periodStart, periodEnd], map: "idx_usage_quotas_period")
+  @@map("usage_quotas")
+}
+
+/// Detailed usage event log for billing
+model UsageEvent {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String              @map("workspace_id") @db.Uuid
+  eventType          String              @map("event_type") @db.VarChar(50)
+  eventCategory      UsageEventCategory  @map("event_category")
+  quantity           Int                 @default(1)
+  relatedResourceId  String?             @map("related_resource_id") @db.Uuid
+  relatedResourceType String?            @map("related_resource_type") @db.VarChar(50)
+  isBillable         Boolean             @default(true) @map("is_billable")
+  billedAt           DateTime?           @map("billed_at") @db.Timestamp()
+  metadata           Json?               @db.JsonB
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, createdAt(sort: Desc)], map: "idx_usage_events_workspace")
+  @@index([eventType], map: "idx_usage_events_type")
+  @@index([isBillable, billedAt], map: "idx_usage_events_billable")  // TODO: Add partial index WHERE is_billable = true in migration)
+  @@index([createdAt(sort: Desc)], map: "idx_usage_events_created")
+  @@map("usage_events")
+}
+
+// =============================================================================
+// MODULE 6: WEBHOOKS & INTEGRATIONS
+// =============================================================================
+
+/// Outgoing webhook configuration
+model WebhookEndpoint {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId        String             @map("workspace_id") @db.Uuid
+  url                String             @db.Text
+  description        String?            @db.VarChar(255)
+  secretKey          String?            @map("secret_key") @db.VarChar(255)
+  authHeaderName     String?            @map("auth_header_name") @db.VarChar(100)
+  authHeaderValue    String?            @map("auth_header_value") @db.Text
+  subscribedEvents   String[]           @map("subscribed_events")
+  maxRetries         Int                @default(3) @map("max_retries")
+  retryDelaySeconds  Int                @default(60) @map("retry_delay_seconds")
+  isActive           Boolean            @default(true) @map("is_active")
+  lastTriggeredAt    DateTime?          @map("last_triggered_at") @db.Timestamp()
+  deletedAt          DateTime?          @map("deleted_at") @db.Timestamp()
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace          Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  webhookDeliveries  WebhookDelivery[]
+
+  @@index([workspaceId], map: "idx_webhook_endpoints_workspace")  // TODO: Add partial index WHERE deleted_at IS NULL in migration)
+  @@index([isActive], map: "idx_webhook_endpoints_active")  // TODO: Add partial index WHERE is_active = true in migration)
+  @@map("webhook_endpoints")
+}
+
+/// Webhook delivery tracking
+model WebhookDelivery {
+  id                String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhookEndpointId String                 @map("webhook_endpoint_id") @db.Uuid
+  eventType         String                 @map("event_type") @db.VarChar(50)
+  payload           Json                   @db.JsonB
+  httpStatusCode    Int?                   @map("http_status_code")
+  requestHeaders    Json?                  @map("request_headers") @db.JsonB
+  responseBody      String?                @map("response_body") @db.Text
+  responseHeaders   Json?                  @map("response_headers") @db.JsonB
+  status            WebhookDeliveryStatus  @default(pending)
+  attemptNumber     Int                    @default(1) @map("attempt_number")
+  maxAttempts       Int                    @default(3) @map("max_attempts")
+  nextRetryAt       DateTime?              @map("next_retry_at") @db.Timestamp()
+  deliveredAt       DateTime?              @map("delivered_at") @db.Timestamp()
+  durationMs        Int?                   @map("duration_ms")
+  errorMessage      String?                @map("error_message") @db.Text
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt         DateTime               @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  webhookEndpoint WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+
+  @@index([webhookEndpointId, createdAt(sort: Desc)], map: "idx_webhook_deliveries_endpoint")
+  @@index([status], map: "idx_webhook_deliveries_status")  // TODO: Add partial index WHERE status IN ('pending', 'failed') in migration
+  @@index([nextRetryAt], map: "idx_webhook_deliveries_retry")  // TODO: Add partial index WHERE status = 'failed' in migration
+  @@map("webhook_deliveries")
+}
+
+// =============================================================================
+// MODULE 6B: AUTHENTICATION TOKENS
+// =============================================================================
+
+/// Password reset tokens for native authentication
+model PasswordResetToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  token     String    @unique @db.VarChar(255)
+  expiresAt DateTime  @map("expires_at") @db.Timestamp()
+  isUsed    Boolean   @default(false) @map("is_used")
+  usedAt    DateTime? @map("used_at") @db.Timestamp()
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token], map: "idx_password_reset_token")
+  @@index([userId, expiresAt], map: "idx_password_reset_user_expiry")
+  @@index([createdAt], map: "idx_password_reset_created")
+  @@map("password_reset_tokens")
+}
+
+/// Refresh tokens for JWT authentication with rotation support
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  token     String    @unique @db.Text
+  expiresAt DateTime  @map("expires_at") @db.Timestamp()
+  isRevoked Boolean   @default(false) @map("is_revoked")
+  revokedAt DateTime? @map("revoked_at") @db.Timestamp()
+  userAgent String?   @map("user_agent") @db.Text
+  ipAddress String?   @map("ip_address") @db.VarChar(45)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token], map: "idx_refresh_token")
+  @@index([userId, isRevoked], map: "idx_refresh_user")
+  @@index([expiresAt], map: "idx_refresh_expiry")
+  @@map("refresh_tokens")
+}
+
+/// Login attempt tracking for security and rate limiting
+model LoginAttempt {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email         String   @db.Citext
+  ipAddress     String   @map("ip_address") @db.VarChar(45)
+  userAgent     String?  @map("user_agent") @db.Text
+  wasSuccessful Boolean  @default(false) @map("was_successful")
+  failureReason String?  @map("failure_reason") @db.VarChar(100)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp()
+
+  @@index([email, createdAt(sort: Desc)], map: "idx_login_attempts_email")
+  @@index([ipAddress, createdAt(sort: Desc)], map: "idx_login_attempts_ip")
+  @@index([createdAt], map: "idx_login_attempts_created")
+  @@map("login_attempts")
+}
+
+// =============================================================================
+// MODULE 7: ANALYTICS & REPORTING
+// =============================================================================
+
+/// Pre-aggregated daily metrics
+model WorkspaceDailyStat {
+  id                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId             String   @map("workspace_id") @db.Uuid
+  statDate                DateTime @map("stat_date") @db.Date
+  leadsCreated            Int      @default(0) @map("leads_created")
+  leadsQualified          Int      @default(0) @map("leads_qualified")
+  leadsWon                Int      @default(0) @map("leads_won")
+  totalExecutions         Int      @default(0) @map("total_executions")
+  successfulExecutions    Int      @default(0) @map("successful_executions")
+  failedExecutions        Int      @default(0) @map("failed_executions")
+  emailsSent              Int      @default(0) @map("emails_sent")
+  emailsOpened            Int      @default(0) @map("emails_opened")
+  emailsClicked           Int      @default(0) @map("emails_clicked")
+  avgExecutionDurationMs  Int?     @map("avg_execution_duration_ms")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, statDate], map: "workspace_daily_stats_unique_workspace_date")
+  @@index([workspaceId, statDate(sort: Desc)], map: "idx_workspace_daily_stats_workspace")
+  @@index([statDate(sort: Desc)], map: "idx_workspace_daily_stats_date")
+  @@map("workspace_daily_stats")
 }

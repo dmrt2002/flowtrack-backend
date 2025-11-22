@@ -15,16 +15,21 @@ This document provides detailed specifications for all database tables in the Fl
 
 ### Table: `users`
 
-**Purpose:** Core user identity, integrated with Clerk authentication.
+**Purpose:** Core user identity supporting both Clerk and native authentication.
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | UUID | PK, DEFAULT uuid_generate_v4() | Internal user ID |
-| `clerk_user_id` | VARCHAR(255) | NOT NULL, UNIQUE | Clerk's external user ID |
+| `clerk_user_id` | VARCHAR(255) | NULL, UNIQUE | Clerk's external user ID (optional) |
 | `email` | CITEXT | NOT NULL, UNIQUE | Case-insensitive email |
 | `first_name` | VARCHAR(100) | NULL | User's first name |
 | `last_name` | VARCHAR(100) | NULL | User's last name |
 | `avatar_url` | TEXT | NULL | Profile image URL |
+| `auth_provider` | VARCHAR(20) | NOT NULL, DEFAULT 'local' | Auth provider (clerk, local) |
+| `password_hash` | VARCHAR(255) | NULL | Argon2id password hash (native auth only) |
+| `password_changed_at` | TIMESTAMP | NULL | Last password change timestamp |
+| `email_verification_token` | VARCHAR(255) | NULL, UNIQUE | Email verification token (native auth) |
+| `email_verification_expiry` | TIMESTAMP | NULL | Token expiry timestamp |
 | `is_active` | BOOLEAN | NOT NULL, DEFAULT true | Account status |
 | `email_verified_at` | TIMESTAMP | NULL | Email verification timestamp |
 | `deleted_at` | TIMESTAMP | NULL | Soft delete timestamp |
@@ -35,16 +40,23 @@ This document provides detailed specifications for all database tables in the Fl
 ```sql
 CREATE INDEX idx_users_clerk_id ON users(clerk_user_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_users_email ON users(email) WHERE deleted_at IS NULL;
+CREATE INDEX idx_users_email_verification_token ON users(email_verification_token) WHERE email_verification_token IS NOT NULL;
+CREATE INDEX idx_users_auth_provider ON users(auth_provider);
 ```
 
 **Constraints:**
 ```sql
 CONSTRAINT users_email_valid CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+CONSTRAINT users_auth_provider_check CHECK (auth_provider IN ('clerk', 'local'))
 ```
 
 **Business Rules:**
+- Dual authentication mode: Supports both Clerk and native email/password
+- Clerk users: `clerk_user_id` required, `password_hash` NULL, `email_verified_at` set on creation
+- Native users: `password_hash` required, `email_verification_token` used until verified
 - Email validation via regex
-- Clerk handles password/authentication
+- Password stored as Argon2id hash (memoryCost: 65536, timeCost: 3, parallelism: 4)
+- Email verification required for native signups
 - Soft delete preserves historical data
 
 ---
@@ -168,6 +180,111 @@ FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 - One credential per provider per workspace
 - Tokens encrypted at application layer (Prisma middleware)
 - Automatic refresh before expiry
+
+---
+
+### Table: `password_reset_tokens`
+
+**Purpose:** Manage password reset tokens for native authentication.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK, DEFAULT uuid_generate_v4() | Token ID |
+| `user_id` | UUID | NOT NULL, FK → users.id | User requesting reset |
+| `token` | VARCHAR(255) | NOT NULL, UNIQUE | Cryptographically random token |
+| `expires_at` | TIMESTAMP | NOT NULL | Token expiry (1 hour from creation) |
+| `is_used` | BOOLEAN | NOT NULL, DEFAULT false | Whether token was used |
+| `used_at` | TIMESTAMP | NULL | When token was used |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Creation time |
+
+**Indexes:**
+```sql
+CREATE INDEX idx_password_reset_token ON password_reset_tokens(token);
+CREATE INDEX idx_password_reset_user_expiry ON password_reset_tokens(user_id, expires_at);
+CREATE INDEX idx_password_reset_created ON password_reset_tokens(created_at);
+```
+
+**Constraints:**
+```sql
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+```
+
+**Business Rules:**
+- Tokens generated using `crypto.randomBytes(32).toString('hex')`
+- 1-hour expiry from creation
+- Single-use only (is_used flag)
+- All tokens invalidated on password change
+- User can have multiple pending tokens (newest takes precedence)
+- Expired tokens should be cleaned up periodically
+
+---
+
+### Table: `refresh_tokens`
+
+**Purpose:** Store refresh tokens for JWT authentication with rotation support.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK, DEFAULT uuid_generate_v4() | Token ID |
+| `user_id` | UUID | NOT NULL, FK → users.id | Token owner |
+| `token` | TEXT | NOT NULL, UNIQUE | Hashed refresh token |
+| `expires_at` | TIMESTAMP | NOT NULL | Token expiry (7 days) |
+| `is_revoked` | BOOLEAN | NOT NULL, DEFAULT false | Revocation status |
+| `revoked_at` | TIMESTAMP | NULL | Revocation timestamp |
+| `user_agent` | TEXT | NULL | Client user agent |
+| `ip_address` | VARCHAR(45) | NULL | Client IP address (IPv4/IPv6) |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Creation time |
+
+**Indexes:**
+```sql
+CREATE INDEX idx_refresh_token ON refresh_tokens(token);
+CREATE INDEX idx_refresh_user ON refresh_tokens(user_id, is_revoked);
+CREATE INDEX idx_refresh_expiry ON refresh_tokens(expires_at);
+```
+
+**Constraints:**
+```sql
+FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+```
+
+**Business Rules:**
+- Tokens stored hashed (SHA-256)
+- 7-day expiry from creation
+- Rotation on each use (old token revoked, new token issued)
+- Tracking device/IP for security
+- User can revoke all tokens ("logout all devices")
+- Expired/revoked tokens cleaned up periodically
+- Token reuse detection for security breach alerting
+
+---
+
+### Table: `login_attempts`
+
+**Purpose:** Track login attempts for rate limiting and security monitoring.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id` | UUID | PK, DEFAULT uuid_generate_v4() | Attempt ID |
+| `email` | CITEXT | NOT NULL | Email attempted |
+| `ip_address` | VARCHAR(45) | NOT NULL | Source IP address |
+| `user_agent` | TEXT | NULL | Client user agent |
+| `was_successful` | BOOLEAN | NOT NULL, DEFAULT false | Success status |
+| `failure_reason` | VARCHAR(100) | NULL | Failure reason code |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Attempt timestamp |
+
+**Indexes:**
+```sql
+CREATE INDEX idx_login_attempts_email ON login_attempts(email, created_at DESC);
+CREATE INDEX idx_login_attempts_ip ON login_attempts(ip_address, created_at DESC);
+CREATE INDEX idx_login_attempts_created ON login_attempts(created_at);
+```
+
+**Business Rules:**
+- Immutable (no updates or deletes for audit trail)
+- Failure reasons: INVALID_PASSWORD, USER_NOT_FOUND, ACCOUNT_LOCKED, EMAIL_NOT_VERIFIED
+- Rate limiting: Max 5 failed attempts per 15 minutes per email/IP
+- Retention: 90 days (then purge)
+- Successful attempts also logged for security monitoring
 
 ---
 
@@ -904,6 +1021,15 @@ FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2025-01-21
-**Total Tables:** 25
+**Document Version:** 1.1
+**Last Updated:** 2025-01-22
+**Total Tables:** 28
+
+**Recent Changes (v1.1):**
+- Added native authentication support alongside Clerk
+- Made `clerk_user_id` optional in `users` table
+- Added `auth_provider`, `password_hash`, `password_changed_at` fields to `users`
+- Added `email_verification_token` and `email_verification_expiry` to `users`
+- New table: `password_reset_tokens` for password reset functionality
+- New table: `refresh_tokens` for JWT refresh token rotation
+- New table: `login_attempts` for rate limiting and security monitoring

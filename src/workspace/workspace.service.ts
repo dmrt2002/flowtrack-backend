@@ -20,7 +20,7 @@ export class WorkspaceService {
    * Get all workspaces the user is a member of
    */
   async getUserWorkspaces(userId: string) {
-    const memberships = await this.prisma.membership.findMany({
+    const memberships = await this.prisma.workspaceMember.findMany({
       where: { userId },
       include: {
         workspace: true,
@@ -38,7 +38,7 @@ export class WorkspaceService {
   }
 
   /**
-   * Create a new workspace and make the creator an ADMIN
+   * Create a new workspace and make the creator an admin
    */
   async createWorkspace(userId: string, dto: CreateWorkspaceDto) {
     // Generate a unique slug
@@ -52,20 +52,31 @@ export class WorkspaceService {
       counter++;
     }
 
+    // Generate unique intake email ID (short UUID-like string)
+    const generateIntakeEmailId = (): string => {
+      return Math.random().toString(36).substring(2, 12);
+    };
+    let intakeEmailId = generateIntakeEmailId();
+    while (await this.prisma.workspace.findUnique({ where: { intakeEmailId } })) {
+      intakeEmailId = generateIntakeEmailId();
+    }
+
     // Create workspace and membership in a transaction
     const workspace = await this.prisma.$transaction(async (tx) => {
       const newWorkspace = await tx.workspace.create({
         data: {
           name: dto.name,
           slug,
+          intakeEmailId,
+          ownerUserId: userId,
         },
       });
 
-      await tx.membership.create({
+      await tx.workspaceMember.create({
         data: {
           userId,
           workspaceId: newWorkspace.id,
-          role: 'ADMIN',
+          role: 'admin',
         },
       });
 
@@ -89,7 +100,8 @@ export class WorkspaceService {
               select: {
                 id: true,
                 email: true,
-                name: true,
+                firstName: true,
+                lastName: true,
               },
             },
           },
@@ -120,14 +132,15 @@ export class WorkspaceService {
     // Check permission
     await this.checkUserWorkspaceAccess(userId, workspaceId);
 
-    const memberships = await this.prisma.membership.findMany({
+    const memberships = await this.prisma.workspaceMember.findMany({
       where: { workspaceId },
       include: {
         user: {
           select: {
             id: true,
             email: true,
-            name: true,
+            firstName: true,
+            lastName: true,
             createdAt: true,
           },
         },
@@ -154,12 +167,12 @@ export class WorkspaceService {
     workspaceId: string,
     dto: InviteUserDto,
   ): Promise<{ message: string; inviteId: string }> {
-    // Check if requester is ADMIN
-    const membership = await this.prisma.membership.findUnique({
+    // Check if requester is admin
+    const membership = await this.prisma.workspaceMember.findUnique({
       where: {
-        userId_workspaceId: {
-          userId,
+        workspaceId_userId: {
           workspaceId,
+          userId,
         },
       },
     });
@@ -168,7 +181,7 @@ export class WorkspaceService {
       throw new ForbiddenException('You do not have access to this workspace');
     }
 
-    if (membership.role !== 'ADMIN') {
+    if (membership.role !== 'admin') {
       throw new ForbiddenException('Only admins can invite users');
     }
 
@@ -179,11 +192,11 @@ export class WorkspaceService {
 
     if (existingUser) {
       // Check if already a member
-      const existingMembership = await this.prisma.membership.findUnique({
+      const existingMembership = await this.prisma.workspaceMember.findUnique({
         where: {
-          userId_workspaceId: {
-            userId: existingUser.id,
+          workspaceId_userId: {
             workspaceId,
+            userId: existingUser.id,
           },
         },
       });
@@ -218,11 +231,11 @@ export class WorkspaceService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    const membership = await this.prisma.membership.findUnique({
+    const membership = await this.prisma.workspaceMember.findUnique({
       where: {
-        userId_workspaceId: {
-          userId,
+        workspaceId_userId: {
           workspaceId,
+          userId,
         },
       },
     });
@@ -236,11 +249,11 @@ export class WorkspaceService {
    * Get user's role in a workspace
    */
   async getUserRole(userId: string, workspaceId: string): Promise<string> {
-    const membership = await this.prisma.membership.findUnique({
+    const membership = await this.prisma.workspaceMember.findUnique({
       where: {
-        userId_workspaceId: {
-          userId,
+        workspaceId_userId: {
           workspaceId,
+          userId,
         },
       },
     });

@@ -13,9 +13,17 @@ async function bootstrap() {
   const port = configService.get('PORT', 3000);
   const frontendUrl = configService.get('FRONTEND_URL', 'http://localhost:3001');
 
+  // Set global API prefix
+  app.setGlobalPrefix('api/v1');
+
   // Enable CORS
   app.enableCors({
-    origin: [frontendUrl, 'http://localhost:3001', 'http://localhost:3000'],
+    origin: [
+      frontendUrl,
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'http://localhost:3003', // Frontend dev server
+    ],
     credentials: true,
   });
 
