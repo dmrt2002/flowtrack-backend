@@ -16,6 +16,7 @@ const auth_module_1 = require("./auth/auth.module");
 const workspace_module_1 = require("./workspace/workspace.module");
 const project_module_1 = require("./project/project.module");
 const task_module_1 = require("./task/task.module");
+const onboarding_module_1 = require("./modules/onboarding/onboarding.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -31,6 +32,7 @@ exports.AppModule = AppModule = __decorate([
             workspace_module_1.WorkspaceModule,
             project_module_1.ProjectModule,
             task_module_1.TaskModule,
+            onboarding_module_1.OnboardingModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

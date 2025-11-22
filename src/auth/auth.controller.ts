@@ -8,10 +8,13 @@ import {
   HttpCode,
   HttpStatus,
   Query,
+  Res,
+  Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
-import { LocalAuthGuard } from './guards/local-auth.guard';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { UnifiedAuthGuard } from './guards/unified-auth.guard';
 import { Public } from './decorators/public.decorator';
 import {
   registerSchema,
@@ -33,6 +36,8 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private authService: AuthService) {}
 
   /**
@@ -45,6 +50,7 @@ export class AuthController {
   async register(
     @Body(new ZodValidationPipe(registerSchema)) dto: RegisterDto,
     @Request() req: any,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{
     user: any;
     accessToken: string;
@@ -55,7 +61,20 @@ export class AuthController {
     const ipAddress = this.getIpAddress(req);
     const userAgent = req.headers['user-agent'] || null;
 
-    return this.authService.registerLocal(dto, ipAddress, userAgent);
+    const result = await this.authService.registerLocal(dto, ipAddress, userAgent);
+
+    // Set httpOnly cookie for 6 hours
+    this.logger.log(`🍪 Setting accessToken cookie for user: ${result.user.email}`);
+    response.cookie('accessToken', result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 6 * 60 * 60 * 1000, // 6 hours
+      path: '/',
+    });
+    this.logger.debug(`🍪 Cookie set successfully with maxAge: 6 hours`);
+
+    return result;
   }
 
   /**
@@ -64,9 +83,12 @@ export class AuthController {
    */
   @Public()
   @Post('login')
-  @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async login(@Request() req: any): Promise<{
+  async login(
+    @Body(new ZodValidationPipe(loginSchema)) dto: LoginDto,
+    @Request() req: any,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{
     user: any;
     accessToken: string;
     refreshToken: string;
@@ -75,43 +97,43 @@ export class AuthController {
     const ipAddress = this.getIpAddress(req);
     const userAgent = req.headers['user-agent'] || null;
 
-    const tokens = await this.authService.generateTokensForUser(
-      req.user.id,
-      req.user.email,
+    // Validate credentials
+    const user = await this.authService.validateLocalUser(
+      dto.email,
+      dto.password,
       ipAddress,
       userAgent,
     );
 
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Generate tokens
+    const tokens = await this.authService.generateTokensForUser(
+      user.id,
+      user.email,
+      ipAddress,
+      userAgent,
+    );
+
+    // Set httpOnly cookie for 6 hours
+    this.logger.log(`🍪 Setting accessToken cookie for user: ${user.email}`);
+    response.cookie('accessToken', tokens.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 6 * 60 * 60 * 1000, // 6 hours
+      path: '/',
+    });
+    this.logger.debug(`🍪 Cookie set successfully with maxAge: 6 hours`);
+
     return {
-      user: req.user,
+      user,
       ...tokens,
     };
   }
 
-  /**
-   * POST /auth/refresh
-   * Refresh access token using refresh token
-   */
-  @Public()
-  @Post('refresh')
-  @HttpCode(HttpStatus.OK)
-  async refresh(
-    @Body(new ZodValidationPipe(refreshTokenSchema)) dto: RefreshTokenDto,
-    @Request() req: any,
-  ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    expiresAt: Date;
-  }> {
-    const ipAddress = this.getIpAddress(req);
-    const userAgent = req.headers['user-agent'] || null;
-
-    return this.authService.refreshTokens(
-      dto.refreshToken,
-      ipAddress,
-      userAgent,
-    );
-  }
 
   /**
    * POST /auth/forgot-password
@@ -169,15 +191,20 @@ export class AuthController {
 
   /**
    * POST /auth/logout
-   * Logout user (revoke refresh token)
+   * Logout user (clear session cookie)
    */
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @HttpCode(HttpStatus.OK)
   async logout(
-    @Body(new ZodValidationPipe(refreshTokenSchema)) dto: RefreshTokenDto,
+    @Request() req: any,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{ message: string }> {
-    return this.authService.logout(dto.refreshToken);
+    // Clear httpOnly cookie
+    this.logger.log(`🍪 Clearing accessToken cookie for user: ${req.user?.email}`);
+    response.clearCookie('accessToken', { path: '/' });
+
+    return { message: 'Logged out successfully' };
   }
 
   /**
@@ -185,10 +212,17 @@ export class AuthController {
    * Logout from all devices
    */
   @Post('logout-all')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @HttpCode(HttpStatus.OK)
-  async logoutAll(@Request() req: any): Promise<{ message: string }> {
-    return this.authService.logoutAll(req.user.id);
+  async logoutAll(
+    @Request() req: any,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<{ message: string }> {
+    // Clear httpOnly cookie
+    this.logger.log(`🍪 Clearing accessToken cookie for user: ${req.user?.email}`);
+    response.clearCookie('accessToken', { path: '/' });
+
+    return { message: 'Logged out from all devices successfully' };
   }
 
   /**
@@ -196,9 +230,18 @@ export class AuthController {
    * Get current user info
    */
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(UnifiedAuthGuard)
   @HttpCode(HttpStatus.OK)
   async getMe(@Request() req: any): Promise<any> {
+    const cookieToken = req.cookies?.accessToken;
+    this.logger.log(`📥 /auth/me called - Cookie present: ${!!cookieToken}`);
+
+    if (!req.user) {
+      this.logger.error('❌ /auth/me - No user attached to request');
+      throw new UnauthorizedException('User not authenticated');
+    }
+
+    this.logger.log(`✅ /auth/me success for user: ${req.user.email}`);
     return req.user;
   }
 

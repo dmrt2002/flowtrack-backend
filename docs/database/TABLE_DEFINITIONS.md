@@ -483,6 +483,70 @@ FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
 - Field types: TEXT, EMAIL, TEXTAREA, DROPDOWN, NUMBER, DATE, CHECKBOX
 - Validation rules stored in JSONB for flexibility
 - Display order determines form layout
+- **Default Fields**: Every workflow is initialized with 3 locked default fields:
+  - `name` (TEXT, required, displayOrder: 0)
+  - `email` (EMAIL, required, displayOrder: 1)
+  - `companyName` (TEXT, required, displayOrder: 2)
+- **UI Treatment**: Default fields displayed as read-only in form builder (cannot be deleted)
+- **Variable Generation**: Each field automatically generates a template variable from fieldKey
+  - Example: `fieldKey: "projectBudget"` → Template variable: `{projectBudget}`
+  - Variables available in email templates and workflow configurations
+- **Field Key Format**: camelCase, alphanumeric only, unique per workflow
+
+**Example Validation Rules (JSONB)**:
+
+```json
+// TEXT field with length constraints
+{
+  "minLength": 3,
+  "maxLength": 100,
+  "pattern": "^[a-zA-Z0-9\\s-]+$"
+}
+
+// EMAIL field (built-in validation)
+{
+  "pattern": "^[^@]+@[^@]+\\.[^@]+$"
+}
+
+// NUMBER field with range
+{
+  "min": 1,
+  "max": 10000,
+  "step": 1
+}
+
+// DROPDOWN field (enum constraint)
+{
+  "enum": ["$500", "$2,000", "$5,000", "$10,000+"]
+}
+
+// TEXTAREA field
+{
+  "minLength": 50,
+  "maxLength": 1000,
+  "rows": 5
+}
+
+// DATE field
+{
+  "minDate": "today",
+  "maxDate": "2025-12-31",
+  "format": "MM/DD/YYYY"
+}
+```
+
+**Example Options (JSONB for DROPDOWN)**:
+
+```json
+// Budget field
+["$500", "$2,000", "$5,000", "$10,000+"]
+
+// Company size field
+["1-10", "11-50", "51-200", "201-500", "500+"]
+
+// Timeline field
+["ASAP", "1-3 months", "3-6 months", "6+ months", "Flexible"]
+```
 
 ---
 
@@ -1021,11 +1085,20 @@ FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Last Updated:** 2025-01-22
 **Total Tables:** 28
 
-**Recent Changes (v1.1):**
+**Recent Changes (v1.2):**
+- Enhanced `form_fields` table documentation with:
+  - Default fields business rules (name, email, companyName)
+  - UI treatment specification for form builder
+  - Variable generation pattern documentation
+  - Field key format requirements
+  - Comprehensive validation rules examples for all field types
+  - Example options for DROPDOWN fields
+
+**Previous Changes (v1.1):**
 - Added native authentication support alongside Clerk
 - Made `clerk_user_id` optional in `users` table
 - Added `auth_provider`, `password_hash`, `password_changed_at` fields to `users`

@@ -11,19 +11,13 @@ const common_1 = require("@nestjs/common");
 const core_1 = require("@nestjs/core");
 const config_1 = require("@nestjs/config");
 const jwt_1 = require("@nestjs/jwt");
-const passport_1 = require("@nestjs/passport");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
 const password_service_1 = require("./services/password.service");
 const token_service_1 = require("./services/token.service");
 const email_service_1 = require("./services/email.service");
 const rate_limit_service_1 = require("./services/rate-limit.service");
-const local_strategy_1 = require("./strategies/local.strategy");
-const jwt_strategy_1 = require("./strategies/jwt.strategy");
-const clerk_auth_guard_1 = require("./guards/clerk-auth.guard");
-const local_auth_guard_1 = require("./guards/local-auth.guard");
-const jwt_auth_guard_1 = require("./guards/jwt-auth.guard");
-const hybrid_auth_guard_1 = require("./guards/hybrid-auth.guard");
+const unified_auth_guard_1 = require("./guards/unified-auth.guard");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -31,14 +25,13 @@ exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule,
-            passport_1.PassportModule.register({ defaultStrategy: 'jwt' }),
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],
                 useFactory: async (configService) => ({
                     secret: configService.get('JWT_SECRET'),
                     signOptions: {
-                        expiresIn: '15m',
+                        expiresIn: '6h',
                     },
                 }),
             }),
@@ -50,14 +43,10 @@ exports.AuthModule = AuthModule = __decorate([
             token_service_1.TokenService,
             email_service_1.EmailService,
             rate_limit_service_1.RateLimitService,
-            local_strategy_1.LocalStrategy,
-            jwt_strategy_1.JwtStrategy,
-            local_auth_guard_1.LocalAuthGuard,
-            jwt_auth_guard_1.JwtAuthGuard,
-            hybrid_auth_guard_1.HybridAuthGuard,
+            unified_auth_guard_1.UnifiedAuthGuard,
             {
                 provide: core_1.APP_GUARD,
-                useClass: clerk_auth_guard_1.ClerkAuthGuard,
+                useClass: unified_auth_guard_1.UnifiedAuthGuard,
             },
         ],
         exports: [
@@ -66,9 +55,7 @@ exports.AuthModule = AuthModule = __decorate([
             token_service_1.TokenService,
             email_service_1.EmailService,
             rate_limit_service_1.RateLimitService,
-            jwt_auth_guard_1.JwtAuthGuard,
-            local_auth_guard_1.LocalAuthGuard,
-            hybrid_auth_guard_1.HybridAuthGuard,
+            unified_auth_guard_1.UnifiedAuthGuard,
         ],
     })
 ], AuthModule);

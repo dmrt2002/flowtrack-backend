@@ -1,0 +1,1 @@
+{"version":3,"file":"simulation.dto.js","sourceRoot":"","sources":["../../../../src/modules/onboarding/dto/simulation.dto.ts"],"names":[],"mappings":";;;AAAA,6BAAwB;AAMX,QAAA,gBAAgB,GAAG,OAAC,CAAC,MAAM,CAAC;IACvC,UAAU,EAAE,OAAC,CAAC,IAAI,CAAC,CAAC,eAAe,EAAE,gBAAgB,EAAE,kBAAkB,CAAC,CAAC;IAC3E,eAAe,EAAE,OAAC,CAAC,MAAM,EAAE,CAAC,IAAI,CAAC,0BAA0B,CAAC;CAC7D,CAAC,CAAC"}

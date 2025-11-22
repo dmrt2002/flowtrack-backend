@@ -24,9 +24,15 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
             throw new Error('JWT_SECRET is not defined in environment variables');
         }
         super({
-            jwtFromRequest: passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken(),
+            jwtFromRequest: (req) => {
+                if (req.cookies && req.cookies.accessToken) {
+                    return req.cookies.accessToken;
+                }
+                return null;
+            },
             ignoreExpiration: false,
             secretOrKey: secret,
+            passReqToCallback: false,
         });
         this.configService = configService;
         this.prisma = prisma;

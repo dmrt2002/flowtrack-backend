@@ -28,17 +28,21 @@ export class EmailService {
       return;
     }
 
-    // Mailtrap configuration - exactly as per their nodemailer example
+    // Port 587 uses STARTTLS (secure: false, but upgrades to TLS)
+    // Port 465 uses SSL/TLS (secure: true)
+    const useSSL = smtpPort === 465;
+
     this.transporter = nodemailer.createTransport({
       host: smtpHost,
       port: smtpPort,
+      secure: useSSL, // true for 465, false for other ports (uses STARTTLS)
       auth: {
         user: smtpUser,
         pass: smtpPass,
       },
     });
 
-    this.logger.log(`Email service initialized with SMTP: ${smtpHost}:${smtpPort}`);
+    this.logger.log(`📧 Email service initialized with SMTP: ${smtpHost}:${smtpPort} (${useSSL ? 'SSL' : 'STARTTLS'})`);
   }
 
   /**

@@ -32,6 +32,8 @@ export declare class AuthService {
         emailVerifiedAt: Date | null;
         deletedAt: Date | null;
         updatedAt: Date;
+        hasCompletedOnboarding: boolean;
+        onboardingCompletedAt: Date | null;
     }>;
     syncUserFromClerk(authId: string): Promise<{
         id: string;
@@ -50,6 +52,8 @@ export declare class AuthService {
         emailVerifiedAt: Date | null;
         deletedAt: Date | null;
         updatedAt: Date;
+        hasCompletedOnboarding: boolean;
+        onboardingCompletedAt: Date | null;
     }>;
     registerLocal(dto: RegisterDto, ipAddress: string, userAgent: string | null): Promise<{
         user: any;

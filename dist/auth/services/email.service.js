@@ -64,15 +64,17 @@ let EmailService = EmailService_1 = class EmailService {
             this.logger.warn('SMTP configuration incomplete. Email functionality will not work.');
             return;
         }
+        const useSSL = smtpPort === 465;
         this.transporter = nodemailer.createTransport({
             host: smtpHost,
             port: smtpPort,
+            secure: useSSL,
             auth: {
                 user: smtpUser,
                 pass: smtpPass,
             },
         });
-        this.logger.log(`Email service initialized with SMTP: ${smtpHost}:${smtpPort}`);
+        this.logger.log(`📧 Email service initialized with SMTP: ${smtpHost}:${smtpPort} (${useSSL ? 'SSL' : 'STARTTLS'})`);
     }
     async sendVerificationEmail(email, token) {
         const appUrl = this.configService.get('APP_URL');

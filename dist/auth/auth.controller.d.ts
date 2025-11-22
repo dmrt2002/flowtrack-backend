@@ -1,22 +1,19 @@
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
-import { type RegisterDto, type ForgotPasswordDto, type ResetPasswordDto, type VerifyEmailDto, type RefreshTokenDto, type ResendVerificationDto } from './dto';
+import { type RegisterDto, type LoginDto, type ForgotPasswordDto, type ResetPasswordDto, type VerifyEmailDto, type ResendVerificationDto } from './dto';
 export declare class AuthController {
     private authService;
+    private readonly logger;
     constructor(authService: AuthService);
-    register(dto: RegisterDto, req: any): Promise<{
+    register(dto: RegisterDto, req: any, response: Response): Promise<{
         user: any;
         accessToken: string;
         refreshToken: string;
         expiresAt: Date;
         message: string;
     }>;
-    login(req: any): Promise<{
+    login(dto: LoginDto, req: any, response: Response): Promise<{
         user: any;
-        accessToken: string;
-        refreshToken: string;
-        expiresAt: Date;
-    }>;
-    refresh(dto: RefreshTokenDto, req: any): Promise<{
         accessToken: string;
         refreshToken: string;
         expiresAt: Date;
@@ -33,10 +30,10 @@ export declare class AuthController {
     resendVerification(dto: ResendVerificationDto): Promise<{
         message: string;
     }>;
-    logout(dto: RefreshTokenDto): Promise<{
+    logout(req: any, response: Response): Promise<{
         message: string;
     }>;
-    logoutAll(req: any): Promise<{
+    logoutAll(req: any, response: Response): Promise<{
         message: string;
     }>;
     getMe(req: any): Promise<any>;

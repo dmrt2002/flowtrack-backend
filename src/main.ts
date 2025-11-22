@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -12,6 +13,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get('PORT', 3000);
   const frontendUrl = configService.get('FRONTEND_URL', 'http://localhost:3001');
+
+  // Cookie parser middleware
+  app.use(cookieParser());
 
   // Set global API prefix
   app.setGlobalPrefix('api/v1');

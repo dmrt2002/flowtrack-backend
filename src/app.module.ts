@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { ProjectModule } from './project/project.module';
 import { TaskModule } from './task/task.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { TaskModule } from './task/task.module';
     WorkspaceModule,
     ProjectModule,
     TaskModule,
+    OnboardingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
