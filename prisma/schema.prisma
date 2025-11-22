@@ -1,0 +1,99 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 1. User Model: Managed by Clerk or your auth provider.
+// We only store the reference ID.
+model User {
+  id        String @id @default(cuid())
+  // The unique ID from your auth provider (e.g., Clerk)
+  authId    String @unique
+  email     String @unique
+  name      String?
+
+  // The user's role in various workspaces
+  memberships Membership[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// 2. Workspace Model: The top-level "tenant" or "organization"
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // For URLs
+
+  // The users who belong to this workspace
+  members   Membership[]
+  // The core resources belonging to this workspace
+  projects  Project[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("workspaces")
+}
+
+// 3. Membership Model: The join table between User and Workspace
+// This is critical for managing roles and permissions.
+model Membership {
+  id          String   @id @default(cuid())
+  role        String   // e.g., "ADMIN", "MEMBER", "BILLING"
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, workspaceId]) // A user can only join a workspace once
+  @@map("memberships")
+}
+
+// 4. Project Model: A generic "resource" owned by a workspace.
+// This could be "Documents", "Posts", "Products", etc.
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+
+  // A project can have sub-resources
+  tasks       Task[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("projects")
+}
+
+// 5. Task Model: A generic "sub-resource"
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  isComplete  Boolean  @default(false)
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("tasks")
+}
