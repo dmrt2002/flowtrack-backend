@@ -86,6 +86,88 @@ let ConfigurationService = class ConfigurationService {
                     });
                 }
             }
+            if (field.type === 'condition') {
+                if (typeof value === 'string') {
+                    const conditionStr = value.trim();
+                    if (field.required && !conditionStr) {
+                        errors.push({
+                            field: field.id,
+                            message: `${field.label} is required`,
+                        });
+                        continue;
+                    }
+                    if (conditionStr) {
+                        const conditionPattern = /^\{([a-zA-Z][a-zA-Z0-9_]*)\}\s*(>|<|>=|<=|==|!=)\s*(\d+(\.\d+)?)$/;
+                        const match = conditionStr.match(conditionPattern);
+                        if (!match) {
+                            errors.push({
+                                field: field.id,
+                                message: 'Invalid format. Use: {fieldName} operator value (e.g., {budget} > 1000)',
+                            });
+                            continue;
+                        }
+                        const [, fieldName, operator, valueStr] = match;
+                        if (!['>', '<', '>=', '<=', '==', '!='].includes(operator)) {
+                            errors.push({
+                                field: field.id,
+                                message: `Invalid operator. Use: >, <, >=, <=, ==, !=`,
+                            });
+                        }
+                        const numValue = parseFloat(valueStr);
+                        if (isNaN(numValue) || numValue < 0) {
+                            errors.push({
+                                field: field.id,
+                                message: 'Value must be a positive number',
+                            });
+                        }
+                        if (field.conditionMetadata?.availableFields &&
+                            field.conditionMetadata.availableFields.length > 0 &&
+                            !field.conditionMetadata.availableFields.includes(fieldName)) {
+                            errors.push({
+                                field: field.id,
+                                message: `Field "${fieldName}" is not available. Available fields: ${field.conditionMetadata.availableFields.join(', ')}`,
+                            });
+                        }
+                    }
+                }
+                else if (typeof value === 'object' && value !== null) {
+                    const condition = value;
+                    if (!condition.field || typeof condition.field !== 'string') {
+                        errors.push({
+                            field: field.id,
+                            message: 'Condition field is required',
+                        });
+                    }
+                    if (!condition.operator ||
+                        !['>', '<', '>=', '<=', '==', '!='].includes(condition.operator)) {
+                        errors.push({
+                            field: field.id,
+                            message: 'Invalid condition operator',
+                        });
+                    }
+                    if (typeof condition.value !== 'number' ||
+                        condition.value < 0) {
+                        errors.push({
+                            field: field.id,
+                            message: 'Condition value must be a positive number',
+                        });
+                    }
+                    if (field.conditionMetadata?.availableFields &&
+                        condition.field &&
+                        !field.conditionMetadata.availableFields.includes(condition.field)) {
+                        errors.push({
+                            field: field.id,
+                            message: `Field "${condition.field}" is not available for conditions`,
+                        });
+                    }
+                }
+                else if (field.required) {
+                    errors.push({
+                        field: field.id,
+                        message: `${field.label} is required`,
+                    });
+                }
+            }
         }
         return {
             isValid: errors.length === 0,

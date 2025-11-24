@@ -7,11 +7,13 @@ import { StrategyTemplateService } from './services/strategy-template.service';
 import { ConfigurationService } from './services/configuration.service';
 import { SimulationService } from './services/simulation.service';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { OAuthModule } from '../oauth/oauth.module';
 
 @Module({
   imports: [
     PrismaModule,
     ConfigModule,
+    OAuthModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

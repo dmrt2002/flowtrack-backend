@@ -5,7 +5,7 @@ import { z } from 'zod';
  * For Step 4: Generating simulation data
  */
 export const simulationSchema = z.object({
-  strategyId: z.enum(['inbound-leads', 'outbound-sales', 'customer-nurture']),
+  strategyId: z.enum(['inbound-leads', 'outbound-sales', 'customer-nurture', 'unified']).optional(), // Optional - unified workflow doesn't need strategy
   configurationId: z.string().uuid('Invalid configuration ID'),
 });
 

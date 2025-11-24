@@ -7,7 +7,7 @@ export interface ConfigFieldValidation {
 }
 export interface ConfigField {
     id: string;
-    type: 'text' | 'number' | 'textarea' | 'select' | 'checkbox';
+    type: 'text' | 'number' | 'textarea' | 'select' | 'checkbox' | 'condition';
     label: string;
     placeholder?: string;
     required: boolean;
@@ -20,10 +20,27 @@ export interface ConfigField {
     variables?: string[];
     rows?: number;
     helpText?: string;
+    conditionMetadata?: {
+        availableFields: string[];
+        operators: string[];
+        defaultField?: string;
+        defaultOperator?: string;
+        defaultValue?: number;
+        defaultCurrency?: 'USD' | 'INR';
+    };
 }
 export interface ConfigSchema {
     fields: ConfigField[];
 }
+export declare const UNIFIED_WORKFLOW_BLUEPRINT: {
+    triggerType: string;
+    steps: {
+        nodeType: string;
+        action: string;
+        description: string;
+    }[];
+};
+export declare const UNIFIED_CONFIG_SCHEMA: ConfigSchema;
 export interface StrategyTemplate {
     id: string;
     name: string;

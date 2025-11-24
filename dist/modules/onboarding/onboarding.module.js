@@ -16,6 +16,7 @@ const strategy_template_service_1 = require("./services/strategy-template.servic
 const configuration_service_1 = require("./services/configuration.service");
 const simulation_service_1 = require("./services/simulation.service");
 const prisma_module_1 = require("../../prisma/prisma.module");
+const oauth_module_1 = require("../oauth/oauth.module");
 let OnboardingModule = class OnboardingModule {
 };
 exports.OnboardingModule = OnboardingModule;
@@ -24,6 +25,7 @@ exports.OnboardingModule = OnboardingModule = __decorate([
         imports: [
             prisma_module_1.PrismaModule,
             config_1.ConfigModule,
+            oauth_module_1.OAuthModule,
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],

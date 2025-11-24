@@ -95,9 +95,18 @@ let UnifiedAuthGuard = UnifiedAuthGuard_1 = class UnifiedAuthGuard {
         if (this.clerkClient) {
             this.logger.debug('🔍 Attempting Clerk authentication...');
             try {
+                let token = null;
                 const authHeader = request.headers.authorization;
                 if (authHeader && authHeader.startsWith('Bearer ')) {
-                    const token = authHeader.substring(7);
+                    token = authHeader.substring(7);
+                    this.logger.debug('🔑 Found Clerk token in Authorization header');
+                }
+                if (!token && request.cookies?.__session) {
+                    token = request.cookies.__session;
+                    this.logger.debug('🍪 Found Clerk token in __session cookie');
+                }
+                if (token) {
+                    this.logger.debug('🔐 Verifying Clerk token...');
                     const payload = await this.clerkClient.verifyToken(token);
                     if (!payload.sub) {
                         throw new common_1.UnauthorizedException('Invalid Clerk token payload');

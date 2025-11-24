@@ -1,8 +1,15 @@
 import { OnboardingService } from './services/onboarding.service';
-import type { StrategySelectionDto, ConfigurationDto, OAuthCompleteDto, SimulationDto, FormFieldsDto } from './dto';
+import type { StrategySelectionDto, ConfigurationDto, OAuthCompleteDto, SimulationDto, FormFieldsDto, CalendlyDto, SchedulingPreferenceDto } from './dto';
 export declare class OnboardingController {
     private onboardingService;
     constructor(onboardingService: OnboardingService);
+    initOnboarding(user: any): Promise<{
+        success: boolean;
+        data: {
+            workflowId: string;
+            configurationSchema: import("./constants/strategy-templates").ConfigSchema;
+        };
+    }>;
     selectStrategy(user: any, dto: StrategySelectionDto): Promise<{
         success: boolean;
         data: {
@@ -61,11 +68,31 @@ export declare class OnboardingController {
             availableVariables: string[];
         };
     }>;
+    saveCalendlyLink(user: any, dto: CalendlyDto): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            calendlyLink: string;
+        };
+    }>;
+    saveSchedulingPreference(user: any, dto: SchedulingPreferenceDto): Promise<{
+        success: boolean;
+        message: string;
+        data: {
+            schedulingType: "CALENDLY" | "GOOGLE_MEET";
+            calendlyLink: string | null;
+        };
+    }>;
     saveConfiguration(user: any, dto: ConfigurationDto): Promise<{
         success: boolean;
         data: {
             configurationId: string;
-            configuration: Record<string, string | number | boolean>;
+            configuration: Record<string, string | number | boolean | {
+                field: string;
+                operator: ">" | "<" | ">=" | "<=" | "==" | "!=";
+                value: number;
+                currency: "USD" | "INR";
+            }>;
             workflowPreview: {
                 steps: {
                     order: number;
@@ -93,6 +120,9 @@ export declare class OnboardingController {
                 sampleLeads: import("./services/simulation.service").SimulationLead[];
                 actionsPerformed: import("./services/simulation.service").SimulationAction[];
                 metrics: import("./services/simulation.service").SimulationMetrics;
+                logicSteps: import("./services/simulation.service").StrategyLogicStep[];
+                testLeads: import("./services/simulation.service").StrategyTestLead[];
+                strategyId: "inbound-leads" | "outbound-sales" | "customer-nurture" | "gatekeeper" | "nurturer" | "closer";
             };
         };
     }>;
@@ -100,6 +130,10 @@ export declare class OnboardingController {
         currentStep: number;
         completedSteps: never[];
         isComplete: boolean;
+        userAuthProvider: import("@prisma/client").$Enums.AuthProvider;
+        signedUpWithGoogle: boolean;
+        gmailConnected: boolean;
+        gmailEmail: null;
         selectedStrategy?: undefined;
         configuration?: undefined;
         oauthConnection?: undefined;
@@ -107,6 +141,10 @@ export declare class OnboardingController {
         currentStep: number;
         completedSteps: number[];
         isComplete: boolean;
+        userAuthProvider: import("@prisma/client").$Enums.AuthProvider;
+        signedUpWithGoogle: boolean;
+        gmailConnected: boolean;
+        gmailEmail: string | null;
         selectedStrategy: {
             id: string;
             name: string;

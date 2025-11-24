@@ -16,6 +16,12 @@ let StrategyTemplateService = class StrategyTemplateService {
     getTemplate(strategyId) {
         return (0, strategy_templates_1.getStrategyTemplate)(strategyId);
     }
+    getUnifiedConfigurationSchema() {
+        return strategy_templates_1.UNIFIED_CONFIG_SCHEMA;
+    }
+    getUnifiedWorkflowBlueprint() {
+        return strategy_templates_1.UNIFIED_WORKFLOW_BLUEPRINT;
+    }
     getConfigurationSchema(strategyId) {
         const template = this.getTemplate(strategyId);
         return template ? template.configSchema : null;

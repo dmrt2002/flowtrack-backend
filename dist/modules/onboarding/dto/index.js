@@ -20,4 +20,6 @@ __exportStar(require("./oauth-complete.dto"), exports);
 __exportStar(require("./simulation.dto"), exports);
 __exportStar(require("./activate-workflow.dto"), exports);
 __exportStar(require("./form-fields.dto"), exports);
+__exportStar(require("./calendly.dto"), exports);
+__exportStar(require("./scheduling.dto"), exports);
 //# sourceMappingURL=index.js.map

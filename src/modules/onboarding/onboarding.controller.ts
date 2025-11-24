@@ -17,6 +17,8 @@ import type {
   OAuthCompleteDto,
   SimulationDto,
   FormFieldsDto,
+  CalendlyDto,
+  SchedulingPreferenceDto,
 } from './dto';
 import {
   strategySelectionSchema,
@@ -24,6 +26,8 @@ import {
   oauthCompleteSchema,
   simulationSchema,
   formFieldsSchema,
+  calendlySchema,
+  schedulingPreferenceSchema,
 } from './dto';
 
 @Controller('onboarding')
@@ -32,8 +36,19 @@ export class OnboardingController {
   constructor(private onboardingService: OnboardingService) {}
 
   /**
+   * GET /api/v1/onboarding/init
+   * Initialize onboarding - auto-creates workflow if needed
+   * This replaces strategy selection as the first step
+   */
+  @Get('init')
+  async initOnboarding(@User() user: any) {
+    return this.onboardingService.getOrCreateWorkflow(user.id);
+  }
+
+  /**
    * POST /api/v1/onboarding/strategy
-   * Step 1: Save strategy selection
+   * Step 1: Save strategy selection (DEPRECATED - kept for backward compatibility)
+   * @deprecated Use GET /api/v1/onboarding/init instead
    */
   @Post('strategy')
   async selectStrategy(
@@ -58,7 +73,7 @@ export class OnboardingController {
 
   /**
    * PUT /api/v1/onboarding/form-fields
-   * Step 2a: Save form field configurations
+   * Step 2: Save form field configurations (Form Builder)
    */
   @Put('form-fields')
   async saveFormFields(
@@ -69,8 +84,33 @@ export class OnboardingController {
   }
 
   /**
+   * POST /api/v1/onboarding/calendly
+   * Step 2.5: Save Calendly link (deprecated - use scheduling-preference)
+   */
+  @Post('calendly')
+  async saveCalendlyLink(
+    @User() user: any,
+    @Body(new ZodValidationPipe(calendlySchema)) dto: CalendlyDto,
+  ) {
+    return this.onboardingService.saveCalendlyLink(user.id, dto);
+  }
+
+  /**
+   * POST /api/v1/onboarding/scheduling-preference
+   * Step 3: Save scheduling preference (Integrations - Calendly or Google Meet)
+   */
+  @Post('scheduling-preference')
+  async saveSchedulingPreference(
+    @User() user: any,
+    @Body(new ZodValidationPipe(schedulingPreferenceSchema))
+    dto: SchedulingPreferenceDto,
+  ) {
+    return this.onboardingService.saveSchedulingPreference(user.id, dto);
+  }
+
+  /**
    * POST /api/v1/onboarding/configure
-   * Step 3: Save configuration (Email Configuration / Mad Libs)
+   * Step 4: Save configuration (Email Configuration / Mad Libs)
    */
   @Post('configure')
   async saveConfiguration(
@@ -82,7 +122,7 @@ export class OnboardingController {
 
   /**
    * POST /api/v1/onboarding/oauth-complete
-   * Step 3: Confirm OAuth connection
+   * Step 3 (Legacy): Confirm OAuth connection (Deprecated - OAuth now handled in Integrations step)
    */
   @Post('oauth-complete')
   async confirmOAuth(
@@ -94,7 +134,7 @@ export class OnboardingController {
 
   /**
    * POST /api/v1/onboarding/simulate
-   * Step 4: Generate simulation
+   * Step 5: Generate simulation
    */
   @Post('simulate')
   async generateSimulation(

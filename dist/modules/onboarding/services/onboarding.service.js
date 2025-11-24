@@ -16,18 +16,197 @@ const prisma_service_1 = require("../../../prisma/prisma.service");
 const strategy_template_service_1 = require("./strategy-template.service");
 const configuration_service_1 = require("./configuration.service");
 const simulation_service_1 = require("./simulation.service");
+const oauth_service_1 = require("../../oauth/oauth.service");
 const slug_util_1 = require("../../../common/utils/slug.util");
 let OnboardingService = OnboardingService_1 = class OnboardingService {
     prisma;
     strategyTemplateService;
     configurationService;
     simulationService;
+    oauthService;
     logger = new common_1.Logger(OnboardingService_1.name);
-    constructor(prisma, strategyTemplateService, configurationService, simulationService) {
+    constructor(prisma, strategyTemplateService, configurationService, simulationService, oauthService) {
         this.prisma = prisma;
         this.strategyTemplateService = strategyTemplateService;
         this.configurationService = configurationService;
         this.simulationService = simulationService;
+        this.oauthService = oauthService;
+    }
+    async getOrCreateWorkflow(userId) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: { ownedWorkspaces: true, workspaceMemberships: true },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        let workspace = user.ownedWorkspaces[0] ||
+            (user.workspaceMemberships[0]
+                ? await this.prisma.workspace.findUnique({
+                    where: { id: user.workspaceMemberships[0].workspaceId },
+                })
+                : null);
+        if (!workspace) {
+            workspace = await this.createDefaultWorkspace(userId, user);
+            this.logger.log(`Auto-created default workspace ${workspace.id} for user ${userId}`);
+        }
+        const existingWorkflow = await this.prisma.workflow.findFirst({
+            where: {
+                workspaceId: workspace.id,
+                status: 'draft',
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+        if (existingWorkflow) {
+            let session = await this.prisma.onboardingSession.findUnique({
+                where: {
+                    userId_workspaceId: {
+                        userId,
+                        workspaceId: workspace.id,
+                    },
+                },
+            });
+            if (!session) {
+                session = await this.prisma.onboardingSession.create({
+                    data: {
+                        userId,
+                        workspaceId: workspace.id,
+                        currentStep: 1,
+                        completedSteps: [],
+                    },
+                });
+            }
+            const unifiedSchema = this.strategyTemplateService.getUnifiedConfigurationSchema();
+            return {
+                success: true,
+                data: {
+                    workflowId: existingWorkflow.id,
+                    configurationSchema: unifiedSchema,
+                },
+            };
+        }
+        const blueprint = this.strategyTemplateService.getUnifiedWorkflowBlueprint();
+        const workflow = await this.prisma.workflow.create({
+            data: {
+                workspaceId: workspace.id,
+                name: 'Lead Automation Workflow',
+                description: 'Automated lead response and follow-up workflow',
+                templateId: 'tmpl_unified_001',
+                strategyId: 'unified',
+                status: 'draft',
+            },
+        });
+        const defaultFields = [
+            {
+                workflowId: workflow.id,
+                fieldKey: 'name',
+                label: 'Name',
+                fieldType: 'TEXT',
+                isRequired: true,
+                displayOrder: 1,
+            },
+            {
+                workflowId: workflow.id,
+                fieldKey: 'email',
+                label: 'Email',
+                fieldType: 'EMAIL',
+                isRequired: true,
+                displayOrder: 2,
+            },
+            {
+                workflowId: workflow.id,
+                fieldKey: 'companyName',
+                label: 'Company Name',
+                fieldType: 'TEXT',
+                isRequired: false,
+                displayOrder: 3,
+            },
+        ];
+        await this.prisma.formField.createMany({
+            data: defaultFields,
+        });
+        const nodes = [];
+        const nodeIdMap = {};
+        blueprint.steps.forEach((step, index) => {
+            const reactFlowNodeId = `node-${index + 1}`;
+            nodeIdMap[index] = reactFlowNodeId;
+            let nodeCategory = 'action';
+            if (step.nodeType.startsWith('trigger_')) {
+                nodeCategory = 'trigger';
+            }
+            else if (step.nodeType === 'delay' ||
+                step.nodeType === 'condition' ||
+                step.nodeType === 'wait_for_reply') {
+                nodeCategory = 'logic';
+            }
+            else if (step.nodeType.startsWith('check_') ||
+                step.nodeType.startsWith('monitor_')) {
+                nodeCategory = 'utility';
+            }
+            const positionX = index * 250;
+            const positionY = 100;
+            nodes.push({
+                workflowId: workflow.id,
+                reactFlowNodeId,
+                nodeType: step.nodeType,
+                nodeCategory,
+                positionX,
+                positionY,
+                config: {
+                    action: step.action,
+                    description: step.description,
+                },
+                executionOrder: index + 1,
+            });
+        });
+        await this.prisma.workflowNode.createMany({
+            data: nodes,
+        });
+        const edges = [];
+        for (let i = 0; i < blueprint.steps.length - 1; i++) {
+            const sourceNodeId = nodeIdMap[i];
+            const targetNodeId = nodeIdMap[i + 1];
+            const reactFlowEdgeId = `edge-${i + 1}-${i + 2}`;
+            edges.push({
+                workflowId: workflow.id,
+                reactFlowEdgeId,
+                sourceNodeId,
+                targetNodeId,
+                edgeType: 'default',
+                isEnabled: true,
+            });
+        }
+        if (edges.length > 0) {
+            await this.prisma.workflowEdge.createMany({
+                data: edges,
+            });
+        }
+        let session = await this.prisma.onboardingSession.findUnique({
+            where: {
+                userId_workspaceId: {
+                    userId,
+                    workspaceId: workspace.id,
+                },
+            },
+        });
+        if (!session) {
+            session = await this.prisma.onboardingSession.create({
+                data: {
+                    userId,
+                    workspaceId: workspace.id,
+                    currentStep: 1,
+                    completedSteps: [],
+                },
+            });
+        }
+        const unifiedSchema = this.strategyTemplateService.getUnifiedConfigurationSchema();
+        return {
+            success: true,
+            data: {
+                workflowId: workflow.id,
+                configurationSchema: unifiedSchema,
+            },
+        };
     }
     async saveStrategy(userId, dto) {
         const template = this.strategyTemplateService.getTemplate(dto.strategyId);
@@ -93,33 +272,44 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
                 status: 'draft',
             },
         });
+        const defaultFields = [
+            {
+                workflowId: workflow.id,
+                fieldKey: 'name',
+                label: 'Name',
+                fieldType: 'TEXT',
+                isRequired: true,
+                displayOrder: 1,
+            },
+            {
+                workflowId: workflow.id,
+                fieldKey: 'email',
+                label: 'Email',
+                fieldType: 'EMAIL',
+                isRequired: true,
+                displayOrder: 2,
+            },
+            {
+                workflowId: workflow.id,
+                fieldKey: 'companyName',
+                label: 'Company Name',
+                fieldType: 'TEXT',
+                isRequired: false,
+                displayOrder: 3,
+            },
+        ];
+        if (dto.strategyId === 'inbound-leads') {
+            defaultFields.push({
+                workflowId: workflow.id,
+                fieldKey: 'budget',
+                label: 'Budget',
+                fieldType: 'NUMBER',
+                isRequired: true,
+                displayOrder: 4,
+            });
+        }
         await this.prisma.formField.createMany({
-            data: [
-                {
-                    workflowId: workflow.id,
-                    fieldKey: 'name',
-                    label: 'Name',
-                    fieldType: 'TEXT',
-                    isRequired: true,
-                    displayOrder: 1,
-                },
-                {
-                    workflowId: workflow.id,
-                    fieldKey: 'email',
-                    label: 'Email',
-                    fieldType: 'EMAIL',
-                    isRequired: true,
-                    displayOrder: 2,
-                },
-                {
-                    workflowId: workflow.id,
-                    fieldKey: 'companyName',
-                    label: 'Company Name',
-                    fieldType: 'TEXT',
-                    isRequired: false,
-                    displayOrder: 3,
-                },
-            ],
+            data: defaultFields,
         });
         const nodes = [];
         const nodePositions = {};
@@ -248,6 +438,16 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
         await this.prisma.formField.createMany({
             data: formFieldsData,
         });
+        const session = await this.getSession(userId);
+        if (session) {
+            await this.prisma.onboardingSession.update({
+                where: { id: session.id },
+                data: {
+                    currentStep: 3,
+                    completedSteps: [...new Set([...session.completedSteps, 2])],
+                },
+            });
+        }
         const savedFields = await this.prisma.formField.findMany({
             where: { workflowId: dto.workflowId },
             orderBy: { displayOrder: 'asc' },
@@ -357,18 +557,120 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
             },
         };
     }
+    async saveCalendlyLink(userId, dto) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                ownedWorkspaces: true,
+                workspaceMemberships: {
+                    include: {
+                        workspace: true,
+                    },
+                },
+            },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        const workflow = await this.prisma.workflow.findUnique({
+            where: { id: dto.workflowId },
+            include: {
+                workspace: true,
+            },
+        });
+        if (!workflow) {
+            throw new common_1.NotFoundException('Workflow not found');
+        }
+        const hasAccess = user.ownedWorkspaces.some((ws) => ws.id === workflow.workspaceId) ||
+            user.workspaceMemberships.some((membership) => membership.workspaceId === workflow.workspaceId);
+        if (!hasAccess) {
+            throw new common_1.ForbiddenException('You do not have access to this workflow');
+        }
+        await this.oauthService.saveCalendlyLink(workflow.workspaceId, dto.calendlyLink);
+        await this.prisma.workflow.update({
+            where: { id: dto.workflowId },
+            data: {
+                schedulingType: 'CALENDLY',
+            },
+        });
+        return {
+            success: true,
+            message: 'Calendly link saved successfully',
+            data: {
+                calendlyLink: dto.calendlyLink,
+            },
+        };
+    }
+    async saveSchedulingPreference(userId, dto) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                ownedWorkspaces: true,
+                workspaceMemberships: {
+                    include: {
+                        workspace: true,
+                    },
+                },
+            },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        const workflow = await this.prisma.workflow.findUnique({
+            where: { id: dto.workflowId },
+            include: {
+                workspace: true,
+            },
+        });
+        if (!workflow) {
+            throw new common_1.NotFoundException('Workflow not found');
+        }
+        const hasAccess = user.ownedWorkspaces.some((ws) => ws.id === workflow.workspaceId) ||
+            user.workspaceMemberships.some((membership) => membership.workspaceId === workflow.workspaceId);
+        if (!hasAccess) {
+            throw new common_1.ForbiddenException('You do not have access to this workflow');
+        }
+        await this.prisma.workflow.update({
+            where: { id: dto.workflowId },
+            data: {
+                schedulingType: dto.schedulingType,
+            },
+        });
+        if (dto.schedulingType === 'CALENDLY' && dto.calendlyLink) {
+            await this.oauthService.saveCalendlyLink(workflow.workspaceId, dto.calendlyLink);
+        }
+        const session = await this.getSession(userId);
+        if (session) {
+            await this.prisma.onboardingSession.update({
+                where: { id: session.id },
+                data: {
+                    currentStep: 3,
+                    completedSteps: [...new Set([...session.completedSteps, 3])],
+                },
+            });
+        }
+        return {
+            success: true,
+            message: 'Scheduling preference saved successfully',
+            data: {
+                schedulingType: dto.schedulingType,
+                calendlyLink: dto.calendlyLink || null,
+            },
+        };
+    }
     async saveConfiguration(userId, dto) {
         const session = await this.getSession(userId);
         if (!session) {
             throw new common_1.BadRequestException('Onboarding session not found');
         }
-        if (!session.completedSteps.includes(1)) {
-            throw new common_1.ForbiddenException('Please complete Step 1 first');
+        let stepsToComplete = [...session.completedSteps];
+        if (!stepsToComplete.includes(2)) {
+            stepsToComplete.push(2);
         }
-        const schema = this.strategyTemplateService.getConfigurationSchema(dto.strategyId);
-        if (!schema) {
-            throw new common_1.BadRequestException('Invalid strategy ID');
+        if (!stepsToComplete.includes(3)) {
+            stepsToComplete.push(3);
         }
+        const schema = this.strategyTemplateService.getUnifiedConfigurationSchema();
         const validation = this.configurationService.validateConfiguration(dto.configuration, schema);
         if (!validation.isValid) {
             throw new common_1.BadRequestException({
@@ -376,13 +678,20 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
                 errors: validation.errors,
             });
         }
-        const workflowPreview = this.configurationService.generateWorkflowPreview(dto.strategyId, dto.configuration);
+        const blueprint = this.strategyTemplateService.getUnifiedWorkflowBlueprint();
+        const workflowPreview = blueprint.steps.map((step, index) => ({
+            order: index + 1,
+            nodeType: step.nodeType,
+            action: step.action,
+            description: step.description,
+            status: 'pending',
+        }));
         const updatedSession = await this.prisma.onboardingSession.update({
             where: { id: session.id },
             data: {
                 configurationData: dto.configuration,
-                currentStep: 3,
-                completedSteps: [...new Set([...session.completedSteps, 2])],
+                currentStep: 4,
+                completedSteps: [...new Set([...stepsToComplete, 4])],
             },
         });
         return {
@@ -441,16 +750,24 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
         if (!session || session.userId !== userId) {
             throw new common_1.BadRequestException('Invalid configuration ID');
         }
-        if (!session.completedSteps.includes(3)) {
-            throw new common_1.ForbiddenException('Please complete Step 3 first');
+        if (!session.completedSteps.includes(4)) {
+            throw new common_1.ForbiddenException('Please complete Step 4 (Email Configuration) first');
         }
-        const workflowPreview = this.configurationService.generateWorkflowPreview(dto.strategyId, session.configurationData);
-        const simulationData = this.simulationService.generateSimulation(dto.strategyId, workflowPreview);
+        const blueprint = this.strategyTemplateService.getUnifiedWorkflowBlueprint();
+        const workflowPreview = blueprint.steps.map((step, index) => ({
+            order: index + 1,
+            nodeType: step.nodeType,
+            action: step.action,
+            description: step.description,
+            status: 'pending',
+        }));
+        const strategyId = dto.strategyId || 'unified';
+        const simulationData = this.simulationService.generateSimulation(strategyId, workflowPreview, session.configurationData);
         await this.prisma.onboardingSession.update({
             where: { id: session.id },
             data: {
-                currentStep: 4,
-                completedSteps: [...new Set([...session.completedSteps, 4])],
+                currentStep: 5,
+                completedSteps: [...new Set([...session.completedSteps, 5])],
             },
         });
         return {
@@ -462,13 +779,33 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
     }
     async getOnboardingStatus(userId) {
         const session = await this.getSession(userId);
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: { authProvider: true },
+        });
         if (!session) {
             return {
                 currentStep: 1,
                 completedSteps: [],
                 isComplete: false,
+                userAuthProvider: user?.authProvider || 'local',
+                signedUpWithGoogle: user?.authProvider === 'clerk',
+                gmailConnected: false,
+                gmailEmail: null,
             };
         }
+        const gmailCredential = await this.prisma.oAuthCredential.findFirst({
+            where: {
+                workspaceId: session.workspaceId,
+                providerType: 'GOOGLE_EMAIL',
+                isActive: true,
+                deletedAt: null,
+            },
+            select: {
+                providerEmail: true,
+                createdAt: true,
+            },
+        });
         const oauthConnection = await this.prisma.oAuthCredential.findFirst({
             where: {
                 workspaceId: session.workspaceId,
@@ -485,6 +822,10 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
             currentStep: session.currentStep,
             completedSteps: session.completedSteps,
             isComplete: session.isComplete,
+            userAuthProvider: user?.authProvider || 'local',
+            signedUpWithGoogle: user?.authProvider === 'clerk',
+            gmailConnected: !!gmailCredential,
+            gmailEmail: gmailCredential?.providerEmail || null,
             selectedStrategy: session.selectedStrategyId
                 ? {
                     id: session.selectedStrategyId,
@@ -585,6 +926,7 @@ exports.OnboardingService = OnboardingService = OnboardingService_1 = __decorate
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         strategy_template_service_1.StrategyTemplateService,
         configuration_service_1.ConfigurationService,
-        simulation_service_1.SimulationService])
+        simulation_service_1.SimulationService,
+        oauth_service_1.OAuthService])
 ], OnboardingService);
 //# sourceMappingURL=onboarding.service.js.map

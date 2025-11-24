@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   CanActivate,
@@ -114,9 +117,23 @@ export class UnifiedAuthGuard implements CanActivate {
       this.logger.debug('🔍 Attempting Clerk authentication...');
 
       try {
+        let token: string | null = null;
+
+        // First: Check Authorization header (for API calls with explicit token)
         const authHeader = request.headers.authorization;
         if (authHeader && authHeader.startsWith('Bearer ')) {
-          const token = authHeader.substring(7); // Remove 'Bearer '
+          token = authHeader.substring(7); // Remove 'Bearer '
+          this.logger.debug('🔑 Found Clerk token in Authorization header');
+        }
+
+        // Fallback: Check __session cookie (Clerk's standard cookie)
+        if (!token && request.cookies?.__session) {
+          token = request.cookies.__session;
+          this.logger.debug('🍪 Found Clerk token in __session cookie');
+        }
+
+        if (token) {
+          this.logger.debug('🔐 Verifying Clerk token...');
 
           // Verify with Clerk
           const payload = await this.clerkClient.verifyToken(token);

@@ -106,6 +106,118 @@ export class ConfigurationService {
           });
         }
       }
+
+      if (field.type === 'condition') {
+        // Accept condition as string format: "{field} operator value"
+        // Also support object format for backward compatibility
+        if (typeof value === 'string') {
+          const conditionStr = value.trim();
+          if (field.required && !conditionStr) {
+            errors.push({
+              field: field.id,
+              message: `${field.label} is required`,
+            });
+            continue;
+          }
+
+          if (conditionStr) {
+            // Validate condition syntax: {fieldName} operator value
+            const conditionPattern = /^\{([a-zA-Z][a-zA-Z0-9_]*)\}\s*(>|<|>=|<=|==|!=)\s*(\d+(\.\d+)?)$/;
+            const match = conditionStr.match(conditionPattern);
+
+            if (!match) {
+              errors.push({
+                field: field.id,
+                message: 'Invalid format. Use: {fieldName} operator value (e.g., {budget} > 1000)',
+              });
+              continue;
+            }
+
+            const [, fieldName, operator, valueStr] = match;
+
+            // Validate operator
+            if (!['>', '<', '>=', '<=', '==', '!='].includes(operator)) {
+              errors.push({
+                field: field.id,
+                message: `Invalid operator. Use: >, <, >=, <=, ==, !=`,
+              });
+            }
+
+            // Validate value is a positive number
+            const numValue = parseFloat(valueStr);
+            if (isNaN(numValue) || numValue < 0) {
+              errors.push({
+                field: field.id,
+                message: 'Value must be a positive number',
+              });
+            }
+
+            // Validate that field exists in availableFields if provided
+            if (
+              field.conditionMetadata?.availableFields &&
+              field.conditionMetadata.availableFields.length > 0 &&
+              !field.conditionMetadata.availableFields.includes(fieldName)
+            ) {
+              errors.push({
+                field: field.id,
+                message: `Field "${fieldName}" is not available. Available fields: ${field.conditionMetadata.availableFields.join(', ')}`,
+              });
+            }
+          }
+        } else if (typeof value === 'object' && value !== null) {
+          // Backward compatibility: support object format
+          const condition = value as {
+            field?: string;
+            operator?: string;
+            value?: number;
+            currency?: string;
+          };
+
+          if (!condition.field || typeof condition.field !== 'string') {
+            errors.push({
+              field: field.id,
+              message: 'Condition field is required',
+            });
+          }
+
+          if (
+            !condition.operator ||
+            !['>', '<', '>=', '<=', '==', '!='].includes(condition.operator)
+          ) {
+            errors.push({
+              field: field.id,
+              message: 'Invalid condition operator',
+            });
+          }
+
+          if (
+            typeof condition.value !== 'number' ||
+            condition.value < 0
+          ) {
+            errors.push({
+              field: field.id,
+              message: 'Condition value must be a positive number',
+            });
+          }
+
+          // Validate that field exists in availableFields if provided
+          if (
+            field.conditionMetadata?.availableFields &&
+            condition.field &&
+            !field.conditionMetadata.availableFields.includes(condition.field)
+          ) {
+            errors.push({
+              field: field.id,
+              message: `Field "${condition.field}" is not available for conditions`,
+            });
+          }
+        } else if (field.required) {
+          errors.push({
+            field: field.id,
+            message: `${field.label} is required`,
+          });
+        }
+      }
     }
 
     return {

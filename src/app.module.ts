@@ -8,6 +8,8 @@ import { WorkspaceModule } from './workspace/workspace.module';
 import { ProjectModule } from './project/project.module';
 import { TaskModule } from './task/task.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { OAuthModule } from './modules/oauth/oauth.module';
+import { CalendarModule } from './modules/calendar/calendar.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { OnboardingModule } from './modules/onboarding/onboarding.module';
     ProjectModule,
     TaskModule,
     OnboardingModule,
+    OAuthModule,
+    CalendarModule,
   ],
   controllers: [AppController],
   providers: [AppService],

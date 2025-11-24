@@ -24,6 +24,9 @@ let OnboardingController = class OnboardingController {
     constructor(onboardingService) {
         this.onboardingService = onboardingService;
     }
+    async initOnboarding(user) {
+        return this.onboardingService.getOrCreateWorkflow(user.id);
+    }
     async selectStrategy(user, dto) {
         return this.onboardingService.saveStrategy(user.id, dto);
     }
@@ -32,6 +35,12 @@ let OnboardingController = class OnboardingController {
     }
     async saveFormFields(user, dto) {
         return this.onboardingService.saveFormFields(user.id, dto);
+    }
+    async saveCalendlyLink(user, dto) {
+        return this.onboardingService.saveCalendlyLink(user.id, dto);
+    }
+    async saveSchedulingPreference(user, dto) {
+        return this.onboardingService.saveSchedulingPreference(user.id, dto);
     }
     async saveConfiguration(user, dto) {
         return this.onboardingService.saveConfiguration(user.id, dto);
@@ -47,6 +56,13 @@ let OnboardingController = class OnboardingController {
     }
 };
 exports.OnboardingController = OnboardingController;
+__decorate([
+    (0, common_1.Get)('init'),
+    __param(0, (0, user_decorator_1.User)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], OnboardingController.prototype, "initOnboarding", null);
 __decorate([
     (0, common_1.Post)('strategy'),
     __param(0, (0, user_decorator_1.User)()),
@@ -71,6 +87,22 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], OnboardingController.prototype, "saveFormFields", null);
+__decorate([
+    (0, common_1.Post)('calendly'),
+    __param(0, (0, user_decorator_1.User)()),
+    __param(1, (0, common_1.Body)(new zod_validation_pipe_1.ZodValidationPipe(dto_1.calendlySchema))),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], OnboardingController.prototype, "saveCalendlyLink", null);
+__decorate([
+    (0, common_1.Post)('scheduling-preference'),
+    __param(0, (0, user_decorator_1.User)()),
+    __param(1, (0, common_1.Body)(new zod_validation_pipe_1.ZodValidationPipe(dto_1.schedulingPreferenceSchema))),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], OnboardingController.prototype, "saveSchedulingPreference", null);
 __decorate([
     (0, common_1.Post)('configure'),
     __param(0, (0, user_decorator_1.User)()),

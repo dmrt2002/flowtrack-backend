@@ -1,8 +1,9 @@
 /**
- * Strategy Template Definitions for Onboarding
+ * Unified Workflow Configuration Schema
  *
- * These templates define the 3 core automation strategies with their
- * configuration schemas for the Mad Libs step.
+ * This defines the single unified workflow that all users configure.
+ * The workflow is: Form submission → Send email → If no reply for X days, send follow-up → If no booking after Y days, lead fails.
+ * Budget qualification is optional and only applies if a numeric field exists.
  */
 
 export interface ConfigFieldValidation {
@@ -15,7 +16,7 @@ export interface ConfigFieldValidation {
 
 export interface ConfigField {
   id: string;
-  type: 'text' | 'number' | 'textarea' | 'select' | 'checkbox';
+  type: 'text' | 'number' | 'textarea' | 'select' | 'checkbox' | 'condition';
   label: string;
   placeholder?: string;
   required: boolean;
@@ -25,12 +26,149 @@ export interface ConfigField {
   variables?: string[];
   rows?: number;
   helpText?: string;
+  conditionMetadata?: {
+    availableFields: string[];
+    operators: string[];
+    defaultField?: string;
+    defaultOperator?: string;
+    defaultValue?: number;
+    defaultCurrency?: 'USD' | 'INR';
+  };
 }
 
 export interface ConfigSchema {
   fields: ConfigField[];
 }
 
+/**
+ * Unified workflow blueprint
+ * All users follow the same workflow structure
+ */
+export const UNIFIED_WORKFLOW_BLUEPRINT = {
+  triggerType: 'form_submission',
+  steps: [
+    {
+      nodeType: 'trigger_form',
+      action: 'Form submitted',
+      description: 'Lead submits intake form',
+    },
+    {
+      nodeType: 'condition',
+      action: 'Check qualification (if numeric field exists)',
+      description: 'Optional: Check if lead meets qualification criteria',
+    },
+    {
+      nodeType: 'send_email',
+      action: 'Send initial email',
+      description: 'Send personalized email with booking link',
+    },
+    {
+      nodeType: 'delay',
+      action: 'Wait for reply',
+      description: 'Monitor for reply for X days',
+    },
+    {
+      nodeType: 'condition',
+      action: 'Did they reply?',
+      description: 'Check if lead replied to email',
+    },
+    {
+      nodeType: 'send_followup',
+      action: 'Send follow-up email',
+      description: 'Send follow-up if no reply after X days',
+    },
+    {
+      nodeType: 'delay',
+      action: 'Wait for booking',
+      description: 'Monitor for booking for Y days',
+    },
+    {
+      nodeType: 'condition',
+      action: 'Did they book?',
+      description: 'Check if lead booked a meeting',
+    },
+    {
+      nodeType: 'mark_failed',
+      action: 'Mark lead as failed',
+      description: 'Lead failed if no booking after Y days',
+    },
+  ],
+};
+
+/**
+ * Unified configuration schema
+ * This is the single schema used for all workflows
+ */
+export const UNIFIED_CONFIG_SCHEMA: ConfigSchema = {
+  fields: [
+    {
+      id: 'emailTemplate',
+      type: 'textarea',
+      label: 'What should the first email say?',
+      placeholder:
+        "Hi {firstName},\n\nThanks for reaching out! I noticed you're interested in [topic]. I'd love to learn more about what you're looking for.\n\nCan you tell me a bit about your current challenges?\n\nBest,\n[Your Name]",
+      required: true,
+      rows: 8,
+      validation: { minLength: 50, maxLength: 1000 },
+      variables: ['{firstName}', '{companyName}', '{email}'],
+      helpText: 'Keep it conversational and ask an engaging question',
+    },
+    {
+      id: 'qualificationCriteria',
+      type: 'condition',
+      label: 'What makes a lead qualified? (optional)',
+      required: false,
+      helpText:
+        'Only applies if you have a numeric field in your form (e.g., budget). Leave empty to skip qualification.',
+      conditionMetadata: {
+        availableFields: [], // Will be populated dynamically from form fields
+        operators: ['>', '<', '>=', '<=', '==', '!='],
+        defaultField: 'budget',
+        defaultOperator: '>',
+        defaultValue: 1000,
+        defaultCurrency: 'USD',
+      },
+    },
+    {
+      id: 'followUpDelayDays',
+      type: 'number',
+      label: 'Days to wait before sending follow-up',
+      placeholder: '3',
+      suffix: 'days',
+      required: true,
+      validation: { min: 1, max: 30 },
+      helpText: 'Number of days from last sent email before sending follow-up',
+    },
+    {
+      id: 'followUpTemplate',
+      type: 'textarea',
+      label: 'Follow-up email template',
+      placeholder:
+        "Hi {firstName},\n\nI wanted to follow up on my previous email. Are you still interested in learning more about how we can help?\n\nIf so, I'd love to schedule a quick call to discuss your needs and see if we're a good fit.\n\nBest,\n[Your Name]",
+      required: true,
+      rows: 6,
+      validation: { minLength: 30, maxLength: 500 },
+      variables: ['{firstName}', '{companyName}'],
+      helpText: 'Keep it brief and friendly',
+    },
+    {
+      id: 'bookingDeadlineDays',
+      type: 'number',
+      label: 'Days before marking lead as failed',
+      placeholder: '7',
+      suffix: 'days',
+      required: true,
+      validation: { min: 1, max: 90 },
+      helpText:
+        'If no booking after this many days, lead will be marked as failed',
+    },
+  ],
+};
+
+/**
+ * Legacy strategy templates - kept for backward compatibility
+ * New unified workflow uses UNIFIED_CONFIG_SCHEMA and UNIFIED_WORKFLOW_BLUEPRINT
+ */
 export interface StrategyTemplate {
   id: string;
   name: string;
@@ -38,7 +176,7 @@ export interface StrategyTemplate {
   icon: string;
   color: string;
   templateId: string;
-  estimatedSetupTime: number; // minutes
+  estimatedSetupTime: number;
   features: string[];
   configSchema: ConfigSchema;
   workflowBlueprint: {
@@ -51,10 +189,7 @@ export interface StrategyTemplate {
   };
 }
 
-/**
- * STRATEGY 1: Inbound Lead Automation
- * For businesses receiving leads via contact forms, email, or web submissions
- */
+// Legacy templates - deprecated, use UNIFIED_CONFIG_SCHEMA instead
 const INBOUND_LEADS_TEMPLATE: StrategyTemplate = {
   id: 'inbound-leads',
   name: 'Inbound Lead Automation',
@@ -78,16 +213,17 @@ const INBOUND_LEADS_TEMPLATE: StrategyTemplate = {
         label: 'How quickly should we respond? (minutes)',
         placeholder: '5',
         suffix: 'minutes',
-        required: true,
+        required: false,
         validation: { min: 1, max: 1440 },
-        helpText: 'Recommended: 5-10 minutes for best conversion rates',
+        helpText:
+          'Recommended: 5-10 minutes for best conversion rates. Default: 5 minutes',
       },
       {
         id: 'emailSubject',
         type: 'text',
         label: 'Email subject line',
-        placeholder: 'Thanks for reaching out, {firstName}!',
-        required: true,
+        placeholder: 'Thanks for reaching out {name}',
+        required: false,
         validation: { minLength: 5, maxLength: 100 },
         variables: ['{firstName}', '{companyName}'],
         helpText: 'You can use variables like {firstName} to personalize',
@@ -97,7 +233,7 @@ const INBOUND_LEADS_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'What should the first email say?',
         placeholder:
-          'Hi {firstName},\n\nThanks for reaching out! I noticed you\'re interested in [topic]. I\'d love to learn more about what you\'re looking for.\n\nCan you tell me a bit about your current challenges?\n\nBest,\n[Your Name]',
+          "Hi {firstName},\n\nThanks for reaching out! I noticed you're interested in [topic]. I'd love to learn more about what you're looking for.\n\nCan you tell me a bit about your current challenges?\n\nBest,\n[Your Name]",
         required: true,
         rows: 8,
         validation: { minLength: 50, maxLength: 1000 },
@@ -106,30 +242,18 @@ const INBOUND_LEADS_TEMPLATE: StrategyTemplate = {
       },
       {
         id: 'qualificationCriteria',
-        type: 'select',
+        type: 'condition',
         label: 'What makes a lead qualified?',
-        options: [
-          { value: 'any', label: 'All leads are qualified' },
-          { value: 'hasCompany', label: 'Must provide company name' },
-          { value: 'hasPhone', label: 'Must provide phone number' },
-          { value: 'hasMessage', label: 'Must include a message' },
-        ],
         required: true,
         helpText: 'Qualified leads get priority treatment',
-      },
-      {
-        id: 'crmIntegration',
-        type: 'select',
-        label: 'Which CRM do you use? (optional)',
-        options: [
-          { value: 'none', label: 'No CRM yet' },
-          { value: 'hubspot', label: 'HubSpot' },
-          { value: 'salesforce', label: 'Salesforce' },
-          { value: 'pipedrive', label: 'Pipedrive' },
-          { value: 'custom', label: 'Custom/Other' },
-        ],
-        required: false,
-        helpText: 'We\'ll add leads to your CRM automatically',
+        conditionMetadata: {
+          availableFields: ['budget'], // Will be populated dynamically from form fields
+          operators: ['>', '<', '>=', '<=', '==', '!='],
+          defaultField: 'budget',
+          defaultOperator: '>',
+          defaultValue: 1000,
+          defaultCurrency: 'USD',
+        },
       },
     ],
   },
@@ -210,7 +334,7 @@ const OUTBOUND_SALES_TEMPLATE: StrategyTemplate = {
         id: 'outreachSubject',
         type: 'text',
         label: 'Email subject line',
-        placeholder: 'Quick question about {companyName}\'s support process',
+        placeholder: "Quick question about {companyName}'s support process",
         required: true,
         validation: { minLength: 5, maxLength: 100 },
         variables: ['{firstName}', '{companyName}', '{industry}'],
@@ -221,7 +345,7 @@ const OUTBOUND_SALES_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'First outreach email',
         placeholder:
-          'Hi {firstName},\n\nI noticed {companyName} is in the {industry} space. I\'m curious - how does your team currently handle [specific problem]?\n\nWe help similar companies [value proposition]. Would it make sense to chat for 10 minutes?\n\nBest,\n[Your Name]',
+          "Hi {firstName},\n\nI noticed {companyName} is in the {industry} space. I'm curious - how does your team currently handle [specific problem]?\n\nWe help similar companies [value proposition]. Would it make sense to chat for 10 minutes?\n\nBest,\n[Your Name]",
         required: true,
         rows: 8,
         validation: { minLength: 50, maxLength: 800 },
@@ -243,7 +367,7 @@ const OUTBOUND_SALES_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'Follow-up email if no response',
         placeholder:
-          'Hi {firstName},\n\nI know you\'re busy! Just wanted to bump this up in your inbox.\n\nStill curious about your approach to [problem]. Worth a quick call?\n\nCheers,\n[Your Name]',
+          "Hi {firstName},\n\nI know you're busy! Just wanted to bump this up in your inbox.\n\nStill curious about your approach to [problem]. Worth a quick call?\n\nCheers,\n[Your Name]",
         required: true,
         rows: 6,
         validation: { minLength: 30, maxLength: 500 },
@@ -258,7 +382,7 @@ const OUTBOUND_SALES_TEMPLATE: StrategyTemplate = {
         suffix: 'follow-ups',
         required: true,
         validation: { min: 0, max: 5 },
-        helpText: 'Don\'t be annoying - 2-3 is usually enough',
+        helpText: "Don't be annoying - 2-3 is usually enough",
       },
     ],
   },
@@ -326,28 +450,6 @@ const CUSTOMER_NURTURE_TEMPLATE: StrategyTemplate = {
   configSchema: {
     fields: [
       {
-        id: 'customerSegment',
-        type: 'select',
-        label: 'Which customer segment are you nurturing?',
-        options: [
-          { value: 'new', label: 'New customers (onboarding)' },
-          { value: 'trial', label: 'Trial users' },
-          { value: 'active', label: 'Active paying customers' },
-          { value: 'churning', label: 'At-risk of churn' },
-        ],
-        required: true,
-        helpText: 'Different segments need different messaging',
-      },
-      {
-        id: 'onboardingGoal',
-        type: 'text',
-        label: 'What should customers accomplish first?',
-        placeholder: 'e.g., Complete their profile, send first email, invite team',
-        required: true,
-        validation: { minLength: 10, maxLength: 150 },
-        helpText: 'The key action that indicates they\'re getting value',
-      },
-      {
         id: 'checkInFrequency',
         type: 'number',
         label: 'Days between check-in emails',
@@ -362,7 +464,7 @@ const CUSTOMER_NURTURE_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'Check-in email template',
         placeholder:
-          'Hey {firstName}!\n\nHow are things going with {productName}? I noticed you haven\'t [specific action] yet.\n\nNeed any help getting started? I\'m here if you have questions!\n\nCheers,\n[Your Name]',
+          "Hey {firstName}!\n\nHow are things going with {productName}? I noticed you haven't [specific action] yet.\n\nNeed any help getting started? I'm here if you have questions!\n\nCheers,\n[Your Name]",
         required: true,
         rows: 7,
         validation: { minLength: 50, maxLength: 800 },
@@ -379,7 +481,7 @@ const CUSTOMER_NURTURE_TEMPLATE: StrategyTemplate = {
         type: 'select',
         label: 'When should we suggest an upgrade?',
         options: [
-          { value: 'never', label: 'Don\'t upsell automatically' },
+          { value: 'never', label: "Don't upsell automatically" },
           { value: 'usage', label: 'When they hit usage limits' },
           { value: 'time', label: 'After X days of active use' },
           { value: 'milestone', label: 'When they achieve a milestone' },
@@ -396,19 +498,19 @@ const CUSTOMER_NURTURE_TEMPLATE: StrategyTemplate = {
         required: false,
         rows: 4,
         validation: { maxLength: 300 },
-        helpText: 'We\'ll monitor these and alert you',
+        helpText: "We'll monitor these and alert you",
       },
       {
         id: 'winbackTemplate',
         type: 'textarea',
         label: 'Win-back email for inactive customers',
         placeholder:
-          'Hi {firstName},\n\nI noticed you haven\'t been using {productName} lately. Everything okay?\n\nIf there\'s something we can improve or if you\'re stuck, I\'d love to help.\n\nBest,\n[Your Name]',
+          "Hi {firstName},\n\nI noticed you haven't been using {productName} lately. Everything okay?\n\nIf there's something we can improve or if you're stuck, I'd love to help.\n\nBest,\n[Your Name]",
         required: false,
         rows: 6,
         validation: { maxLength: 700 },
         variables: ['{firstName}', '{daysSinceLastLogin}', '{productName}'],
-        helpText: 'Genuine concern, offer help, don\'t guilt trip',
+        helpText: "Genuine concern, offer help, don't guilt trip",
       },
     ],
   },
@@ -495,7 +597,8 @@ const GATEKEEPER_TEMPLATE: StrategyTemplate = {
         id: 'declineEmailBody',
         type: 'textarea',
         label: 'Polite decline email',
-        placeholder: 'Thank you for reaching out. Unfortunately, we focus on projects with budgets of $X or higher...',
+        placeholder:
+          'Thank you for reaching out. Unfortunately, we focus on projects with budgets of $X or higher...',
         required: true,
         rows: 6,
         validation: { minLength: 50, maxLength: 500 },
@@ -570,7 +673,8 @@ const NURTURER_TEMPLATE: StrategyTemplate = {
         id: 'emailSequence',
         type: 'textarea',
         label: 'Email sequence overview',
-        placeholder: 'Email 1: Welcome, Email 2: Value prop, Email 3: Case study...',
+        placeholder:
+          'Email 1: Welcome, Email 2: Value prop, Email 3: Case study...',
         required: true,
         rows: 6,
         validation: { minLength: 50 },
@@ -659,7 +763,8 @@ const CLOSER_TEMPLATE: StrategyTemplate = {
         id: 'reminderEmailBody',
         type: 'textarea',
         label: 'Reminder email template',
-        placeholder: 'Hi {firstName}, just a reminder about our call tomorrow at {time}...',
+        placeholder:
+          'Hi {firstName}, just a reminder about our call tomorrow at {time}...',
         required: true,
         rows: 6,
         validation: { minLength: 50, maxLength: 500 },
@@ -700,15 +805,21 @@ export const STRATEGY_TEMPLATES: Record<string, StrategyTemplate> = {
   'inbound-leads': INBOUND_LEADS_TEMPLATE,
   'outbound-sales': OUTBOUND_SALES_TEMPLATE,
   'customer-nurture': CUSTOMER_NURTURE_TEMPLATE,
-  'gatekeeper': GATEKEEPER_TEMPLATE,
-  'nurturer': NURTURER_TEMPLATE,
-  'closer': CLOSER_TEMPLATE,
+  gatekeeper: GATEKEEPER_TEMPLATE,
+  nurturer: NURTURER_TEMPLATE,
+  closer: CLOSER_TEMPLATE,
 };
 
 /**
  * Valid strategy IDs
  */
-export type StrategyId = 'inbound-leads' | 'outbound-sales' | 'customer-nurture' | 'gatekeeper' | 'nurturer' | 'closer';
+export type StrategyId =
+  | 'inbound-leads'
+  | 'outbound-sales'
+  | 'customer-nurture'
+  | 'gatekeeper'
+  | 'nurturer'
+  | 'closer';
 
 /**
  * Helper to get template by ID

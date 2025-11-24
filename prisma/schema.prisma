@@ -344,6 +344,7 @@ model Workflow {
   strategyId            String?        @map("strategy_id") @db.VarChar(100)
   configurationData     Json?          @map("configuration_data") @db.JsonB
   bookingUrl            String?        @map("booking_url") @db.Text
+  schedulingType        String?        @map("scheduling_type") @db.VarChar(20) // 'CALENDLY' | 'GOOGLE_MEET'
   status                WorkflowStatus @default(draft)
   version               Int            @default(1)
   settings              Json           @default("{}") @db.JsonB
@@ -472,6 +473,8 @@ model Lead {
   assignedToUserId   String?     @map("assigned_to_user_id") @db.Uuid
   score              Int         @default(0)
   tags               String[]
+  meetingEventId     String?     @map("meeting_event_id") @db.VarChar(255)
+  meetingStatus      String?     @map("meeting_status") @db.VarChar(20) // 'SCHEDULED' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED' | 'COMPLETED'
   lastActivityAt     DateTime?   @map("last_activity_at") @db.Timestamp()
   lastEmailSentAt    DateTime?   @map("last_email_sent_at") @db.Timestamp()
   lastEmailOpenedAt  DateTime?   @map("last_email_opened_at") @db.Timestamp()

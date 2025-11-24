@@ -9,6 +9,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { StrategyTemplateService } from './strategy-template.service';
 import { ConfigurationService } from './configuration.service';
 import { SimulationService } from './simulation.service';
+import { OAuthService } from '../../oauth/oauth.service';
 import { generateSlug } from '../../../common/utils/slug.util';
 import {
   StrategySelectionDto,
@@ -16,6 +17,8 @@ import {
   OAuthCompleteDto,
   SimulationDto,
   FormFieldsDto,
+  CalendlyDto,
+  SchedulingPreferenceDto,
 } from '../dto';
 
 @Injectable()
@@ -27,10 +30,250 @@ export class OnboardingService {
     private strategyTemplateService: StrategyTemplateService,
     private configurationService: ConfigurationService,
     private simulationService: SimulationService,
+    private oauthService: OAuthService,
   ) {}
 
   /**
-   * Step 1: Save strategy selection
+   * Auto-create or get existing workflow for unified onboarding flow
+   * This is called when user first accesses onboarding (replaces strategy selection)
+   */
+  async getOrCreateWorkflow(userId: string) {
+    // Get user's workspace
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { ownedWorkspaces: true, workspaceMemberships: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    let workspace =
+      user.ownedWorkspaces[0] ||
+      (user.workspaceMemberships[0]
+        ? await this.prisma.workspace.findUnique({
+            where: { id: user.workspaceMemberships[0].workspaceId },
+          })
+        : null);
+
+    // Auto-create workspace if none exists
+    if (!workspace) {
+      workspace = await this.createDefaultWorkspace(userId, user);
+      this.logger.log(
+        `Auto-created default workspace ${workspace.id} for user ${userId}`,
+      );
+    }
+
+    // Check if workflow already exists
+    const existingWorkflow = await this.prisma.workflow.findFirst({
+      where: {
+        workspaceId: workspace.id,
+        status: 'draft',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingWorkflow) {
+      // Get or create onboarding session
+      let session = await this.prisma.onboardingSession.findUnique({
+        where: {
+          userId_workspaceId: {
+            userId,
+            workspaceId: workspace.id,
+          },
+        },
+      });
+
+      if (!session) {
+        session = await this.prisma.onboardingSession.create({
+          data: {
+            userId,
+            workspaceId: workspace.id,
+            currentStep: 1,
+            completedSteps: [],
+          },
+        });
+      }
+
+      // Get unified configuration schema
+      const unifiedSchema = this.strategyTemplateService.getUnifiedConfigurationSchema();
+
+      return {
+        success: true,
+        data: {
+          workflowId: existingWorkflow.id,
+          configurationSchema: unifiedSchema,
+        },
+      };
+    }
+
+    // Create new workflow with unified blueprint
+    const blueprint = this.strategyTemplateService.getUnifiedWorkflowBlueprint();
+
+    const workflow = await this.prisma.workflow.create({
+      data: {
+        workspaceId: workspace.id,
+        name: 'Lead Automation Workflow',
+        description: 'Automated lead response and follow-up workflow',
+        templateId: 'tmpl_unified_001',
+        strategyId: 'unified', // New unified strategy ID
+        status: 'draft',
+      },
+    });
+
+    // Create default form fields (Name, Email, Company Name)
+    const defaultFields: Array<{
+      workflowId: string;
+      fieldKey: string;
+      label: string;
+      fieldType: 'TEXT' | 'EMAIL' | 'NUMBER';
+      isRequired: boolean;
+      displayOrder: number;
+    }> = [
+      {
+        workflowId: workflow.id,
+        fieldKey: 'name',
+        label: 'Name',
+        fieldType: 'TEXT',
+        isRequired: true,
+        displayOrder: 1,
+      },
+      {
+        workflowId: workflow.id,
+        fieldKey: 'email',
+        label: 'Email',
+        fieldType: 'EMAIL',
+        isRequired: true,
+        displayOrder: 2,
+      },
+      {
+        workflowId: workflow.id,
+        fieldKey: 'companyName',
+        label: 'Company Name',
+        fieldType: 'TEXT',
+        isRequired: false,
+        displayOrder: 3,
+      },
+    ];
+
+    await this.prisma.formField.createMany({
+      data: defaultFields,
+    });
+
+    // Create WorkflowNodes from blueprint
+    const nodes: Array<{
+      workflowId: string;
+      reactFlowNodeId: string;
+      nodeType: string;
+      nodeCategory: 'trigger' | 'action' | 'logic' | 'utility';
+      positionX: number;
+      positionY: number;
+      config: Record<string, any>;
+      executionOrder: number;
+    }> = [];
+    const nodeIdMap: Record<number, string> = {};
+
+    blueprint.steps.forEach((step, index) => {
+      const reactFlowNodeId = `node-${index + 1}`;
+      nodeIdMap[index] = reactFlowNodeId;
+
+      let nodeCategory: 'trigger' | 'action' | 'logic' | 'utility' = 'action';
+      if (step.nodeType.startsWith('trigger_')) {
+        nodeCategory = 'trigger';
+      } else if (
+        step.nodeType === 'delay' ||
+        step.nodeType === 'condition' ||
+        step.nodeType === 'wait_for_reply'
+      ) {
+        nodeCategory = 'logic';
+      } else if (
+        step.nodeType.startsWith('check_') ||
+        step.nodeType.startsWith('monitor_')
+      ) {
+        nodeCategory = 'utility';
+      }
+
+      const positionX = index * 250;
+      const positionY = 100;
+
+      nodes.push({
+        workflowId: workflow.id,
+        reactFlowNodeId,
+        nodeType: step.nodeType,
+        nodeCategory,
+        positionX,
+        positionY,
+        config: {
+          action: step.action,
+          description: step.description,
+        },
+        executionOrder: index + 1,
+      });
+    });
+
+    await this.prisma.workflowNode.createMany({
+      data: nodes,
+    });
+
+    // Create WorkflowEdges
+    const edges = [];
+    for (let i = 0; i < blueprint.steps.length - 1; i++) {
+      const sourceNodeId = nodeIdMap[i];
+      const targetNodeId = nodeIdMap[i + 1];
+      const reactFlowEdgeId = `edge-${i + 1}-${i + 2}`;
+
+      edges.push({
+        workflowId: workflow.id,
+        reactFlowEdgeId,
+        sourceNodeId,
+        targetNodeId,
+        edgeType: 'default',
+        isEnabled: true,
+      });
+    }
+
+    if (edges.length > 0) {
+      await this.prisma.workflowEdge.createMany({
+        data: edges,
+      });
+    }
+
+    // Create or update onboarding session
+    let session = await this.prisma.onboardingSession.findUnique({
+      where: {
+        userId_workspaceId: {
+          userId,
+          workspaceId: workspace.id,
+        },
+      },
+    });
+
+    if (!session) {
+      session = await this.prisma.onboardingSession.create({
+        data: {
+          userId,
+          workspaceId: workspace.id,
+          currentStep: 1,
+          completedSteps: [],
+        },
+      });
+    }
+
+    // Get unified configuration schema
+    const unifiedSchema = this.strategyTemplateService.getUnifiedConfigurationSchema();
+
+    return {
+      success: true,
+      data: {
+        workflowId: workflow.id,
+        configurationSchema: unifiedSchema,
+      },
+    };
+  }
+
+  /**
+   * Step 1: Save strategy selection (DEPRECATED - kept for backward compatibility)
+   * @deprecated Use getOrCreateWorkflow() instead
    */
   async saveStrategy(userId: string, dto: StrategySelectionDto) {
     // Validate strategy exists
@@ -118,33 +361,54 @@ export class OnboardingService {
     });
 
     // Create default form fields (Name, Email, Company Name)
+    const defaultFields: Array<{
+      workflowId: string;
+      fieldKey: string;
+      label: string;
+      fieldType: 'TEXT' | 'EMAIL' | 'NUMBER';
+      isRequired: boolean;
+      displayOrder: number;
+    }> = [
+      {
+        workflowId: workflow.id,
+        fieldKey: 'name',
+        label: 'Name',
+        fieldType: 'TEXT',
+        isRequired: true,
+        displayOrder: 1,
+      },
+      {
+        workflowId: workflow.id,
+        fieldKey: 'email',
+        label: 'Email',
+        fieldType: 'EMAIL',
+        isRequired: true,
+        displayOrder: 2,
+      },
+      {
+        workflowId: workflow.id,
+        fieldKey: 'companyName',
+        label: 'Company Name',
+        fieldType: 'TEXT',
+        isRequired: false,
+        displayOrder: 3,
+      },
+    ];
+
+    // Add Budget field for Gatekeeper strategy (mapped as 'inbound-leads' in backend)
+    if (dto.strategyId === 'inbound-leads') {
+      defaultFields.push({
+        workflowId: workflow.id,
+        fieldKey: 'budget',
+        label: 'Budget',
+        fieldType: 'NUMBER',
+        isRequired: true,
+        displayOrder: 4,
+      });
+    }
+
     await this.prisma.formField.createMany({
-      data: [
-        {
-          workflowId: workflow.id,
-          fieldKey: 'name',
-          label: 'Name',
-          fieldType: 'TEXT',
-          isRequired: true,
-          displayOrder: 1,
-        },
-        {
-          workflowId: workflow.id,
-          fieldKey: 'email',
-          label: 'Email',
-          fieldType: 'EMAIL',
-          isRequired: true,
-          displayOrder: 2,
-        },
-        {
-          workflowId: workflow.id,
-          fieldKey: 'companyName',
-          label: 'Company Name',
-          fieldType: 'TEXT',
-          isRequired: false,
-          displayOrder: 3,
-        },
-      ],
+      data: defaultFields,
     });
 
     // Create WorkflowNodes from blueprint steps
@@ -239,7 +503,7 @@ export class OnboardingService {
   }
 
   /**
-   * Step 2a: Save form field configurations
+   * Step 2: Save form field configurations (Form Builder)
    */
   async saveFormFields(userId: string, dto: FormFieldsDto) {
     // Get user with workspace relations
@@ -324,6 +588,18 @@ export class OnboardingService {
     await this.prisma.formField.createMany({
       data: formFieldsData,
     });
+
+    // Mark Step 2 (Form Builder) as complete in onboarding session
+    const session = await this.getSession(userId);
+    if (session) {
+      await this.prisma.onboardingSession.update({
+        where: { id: session.id },
+        data: {
+          currentStep: 3,
+          completedSteps: [...new Set([...session.completedSteps, 2])],
+        },
+      });
+    }
 
     // Fetch saved form fields
     const savedFields = await this.prisma.formField.findMany({
@@ -488,7 +764,163 @@ export class OnboardingService {
   }
 
   /**
-   * Step 3: Save configuration (Email Configuration / Mad Libs)
+   * Step 2.5: Save Calendly link (deprecated - use saveSchedulingPreference instead)
+   */
+  async saveCalendlyLink(userId: string, dto: CalendlyDto) {
+    // Get user with workspace relations
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        ownedWorkspaces: true,
+        workspaceMemberships: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Find workflow and validate ownership
+    const workflow = await this.prisma.workflow.findUnique({
+      where: { id: dto.workflowId },
+      include: {
+        workspace: true,
+      },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    // Check if user has access to the workflow's workspace
+    const hasAccess =
+      user.ownedWorkspaces.some((ws) => ws.id === workflow.workspaceId) ||
+      user.workspaceMemberships.some(
+        (membership) => membership.workspaceId === workflow.workspaceId,
+      );
+
+    if (!hasAccess) {
+      throw new ForbiddenException(
+        'You do not have access to this workflow',
+      );
+    }
+
+    // Save Calendly link using OAuth service
+    await this.oauthService.saveCalendlyLink(
+      workflow.workspaceId,
+      dto.calendlyLink,
+    );
+
+    // Update workflow scheduling type
+    await this.prisma.workflow.update({
+      where: { id: dto.workflowId },
+      data: {
+        schedulingType: 'CALENDLY',
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Calendly link saved successfully',
+      data: {
+        calendlyLink: dto.calendlyLink,
+      },
+    };
+  }
+
+  /**
+   * Step 2.5: Save scheduling preference (Calendly or Google Meet)
+   */
+  async saveSchedulingPreference(
+    userId: string,
+    dto: SchedulingPreferenceDto,
+  ) {
+    // Get user with workspace relations
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        ownedWorkspaces: true,
+        workspaceMemberships: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Find workflow and validate ownership
+    const workflow = await this.prisma.workflow.findUnique({
+      where: { id: dto.workflowId },
+      include: {
+        workspace: true,
+      },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    // Check if user has access to the workflow's workspace
+    const hasAccess =
+      user.ownedWorkspaces.some((ws) => ws.id === workflow.workspaceId) ||
+      user.workspaceMemberships.some(
+        (membership) => membership.workspaceId === workflow.workspaceId,
+      );
+
+    if (!hasAccess) {
+      throw new ForbiddenException(
+        'You do not have access to this workflow',
+      );
+    }
+
+    // Update workflow scheduling type
+    await this.prisma.workflow.update({
+      where: { id: dto.workflowId },
+      data: {
+        schedulingType: dto.schedulingType,
+      },
+    });
+
+    // If Calendly, save the link
+    if (dto.schedulingType === 'CALENDLY' && dto.calendlyLink) {
+      await this.oauthService.saveCalendlyLink(
+        workflow.workspaceId,
+        dto.calendlyLink,
+      );
+    }
+
+    // Mark Step 3 (Integrations) as complete in onboarding session
+    const session = await this.getSession(userId);
+    if (session) {
+      await this.prisma.onboardingSession.update({
+        where: { id: session.id },
+        data: {
+          currentStep: 3,
+          completedSteps: [...new Set([...session.completedSteps, 3])],
+        },
+      });
+    }
+
+    return {
+      success: true,
+      message: 'Scheduling preference saved successfully',
+      data: {
+        schedulingType: dto.schedulingType,
+        calendlyLink: dto.calendlyLink || null,
+      },
+    };
+  }
+
+  /**
+   * Step 4: Save configuration (Email Configuration / Mad Libs)
    */
   async saveConfiguration(userId: string, dto: ConfigurationDto) {
     // Get onboarding session
@@ -498,19 +930,23 @@ export class OnboardingService {
       throw new BadRequestException('Onboarding session not found');
     }
 
-    // Validate step progression
-    if (!session.completedSteps.includes(1)) {
-      throw new ForbiddenException('Please complete Step 1 first');
+    // Validate step progression - Step 2 (Form Builder) must be complete
+    // Step 2 and Step 3 are optional, so we auto-complete them if not already done
+    // This allows users to skip form builder or integrations and proceed
+    let stepsToComplete = [...session.completedSteps];
+    
+    // Auto-complete Step 2 if missing (form builder might be skipped)
+    if (!stepsToComplete.includes(2)) {
+      stepsToComplete.push(2);
+    }
+    
+    // Auto-complete Step 3 if missing (integrations are optional)
+    if (!stepsToComplete.includes(3)) {
+      stepsToComplete.push(3);
     }
 
-    // Validate configuration against schema
-    const schema = this.strategyTemplateService.getConfigurationSchema(
-      dto.strategyId,
-    );
-
-    if (!schema) {
-      throw new BadRequestException('Invalid strategy ID');
-    }
+    // Get unified configuration schema (no strategy needed)
+    const schema = this.strategyTemplateService.getUnifiedConfigurationSchema();
 
     const validation = this.configurationService.validateConfiguration(
       dto.configuration,
@@ -524,19 +960,24 @@ export class OnboardingService {
       });
     }
 
-    // Generate workflow preview
-    const workflowPreview = this.configurationService.generateWorkflowPreview(
-      dto.strategyId,
-      dto.configuration,
-    );
+    // Generate workflow preview using unified blueprint
+    const blueprint = this.strategyTemplateService.getUnifiedWorkflowBlueprint();
+    const workflowPreview = blueprint.steps.map((step, index) => ({
+      order: index + 1,
+      nodeType: step.nodeType,
+      action: step.action,
+      description: step.description,
+      status: 'pending' as const,
+    }));
 
-    // Update session
+    // Update session - Mark Step 4 (Email Configuration) as complete
+    // Also ensure Step 3 is marked complete (since integrations are optional)
     const updatedSession = await this.prisma.onboardingSession.update({
       where: { id: session.id },
       data: {
         configurationData: dto.configuration as any,
-        currentStep: 3,
-        completedSteps: [...new Set([...session.completedSteps, 2])],
+        currentStep: 4,
+        completedSteps: [...new Set([...stepsToComplete, 4])],
       },
     });
 
@@ -553,7 +994,7 @@ export class OnboardingService {
   }
 
   /**
-   * Step 3: Confirm OAuth connection
+   * Step 3 (Legacy): Confirm OAuth connection (Deprecated - OAuth now handled in Integrations step)
    */
   async confirmOAuthConnection(userId: string, dto: OAuthCompleteDto) {
     // Get onboarding session
@@ -607,7 +1048,7 @@ export class OnboardingService {
   }
 
   /**
-   * Step 4: Generate simulation
+   * Step 5: Generate simulation
    */
   async generateSimulation(userId: string, dto: SimulationDto) {
     // Get onboarding session by ID
@@ -619,29 +1060,35 @@ export class OnboardingService {
       throw new BadRequestException('Invalid configuration ID');
     }
 
-    // Validate step progression
-    if (!session.completedSteps.includes(3)) {
-      throw new ForbiddenException('Please complete Step 3 first');
+    // Validate step progression - Step 4 (Email Configuration) must be complete
+    if (!session.completedSteps.includes(4)) {
+      throw new ForbiddenException('Please complete Step 4 (Email Configuration) first');
     }
 
-    // Generate workflow preview
-    const workflowPreview = this.configurationService.generateWorkflowPreview(
-      dto.strategyId,
+    // Generate workflow preview using unified blueprint
+    const blueprint = this.strategyTemplateService.getUnifiedWorkflowBlueprint();
+    const workflowPreview = blueprint.steps.map((step, index) => ({
+      order: index + 1,
+      nodeType: step.nodeType,
+      action: step.action,
+      description: step.description,
+      status: 'pending' as const,
+    }));
+
+    // Generate simulation with configuration data (use 'unified' as default strategyId)
+    const strategyId = dto.strategyId || 'unified';
+    const simulationData = this.simulationService.generateSimulation(
+      strategyId,
+      workflowPreview,
       session.configurationData as Record<string, any>,
     );
 
-    // Generate simulation
-    const simulationData = this.simulationService.generateSimulation(
-      dto.strategyId,
-      workflowPreview,
-    );
-
-    // Update session to mark simulation viewed (step 4 complete)
+    // Update session to mark simulation viewed (step 5 complete)
     await this.prisma.onboardingSession.update({
       where: { id: session.id },
       data: {
-        currentStep: 4,
-        completedSteps: [...new Set([...session.completedSteps, 4])],
+        currentStep: 5,
+        completedSteps: [...new Set([...session.completedSteps, 5])],
       },
     });
 
@@ -659,15 +1106,39 @@ export class OnboardingService {
   async getOnboardingStatus(userId: string) {
     const session = await this.getSession(userId);
 
+    // Get user to check auth provider
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { authProvider: true },
+    });
+
     if (!session) {
       return {
         currentStep: 1,
         completedSteps: [],
         isComplete: false,
+        userAuthProvider: user?.authProvider || 'local',
+        signedUpWithGoogle: user?.authProvider === 'clerk',
+        gmailConnected: false,
+        gmailEmail: null,
       };
     }
 
-    // Get OAuth connection status
+    // Get Gmail OAuth connection status specifically
+    const gmailCredential = await this.prisma.oAuthCredential.findFirst({
+      where: {
+        workspaceId: session.workspaceId,
+        providerType: 'GOOGLE_EMAIL',
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        providerEmail: true,
+        createdAt: true,
+      },
+    });
+
+    // Get any OAuth connection (for backward compatibility)
     const oauthConnection = await this.prisma.oAuthCredential.findFirst({
       where: {
         workspaceId: session.workspaceId,
@@ -685,6 +1156,10 @@ export class OnboardingService {
       currentStep: session.currentStep,
       completedSteps: session.completedSteps,
       isComplete: session.isComplete,
+      userAuthProvider: user?.authProvider || 'local',
+      signedUpWithGoogle: user?.authProvider === 'clerk',
+      gmailConnected: !!gmailCredential,
+      gmailEmail: gmailCredential?.providerEmail || null,
       selectedStrategy: session.selectedStrategyId
         ? {
             id: session.selectedStrategyId,
