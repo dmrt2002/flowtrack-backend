@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { StrategyTemplateService } from './strategy-template.service';
 import { ConfigurationService } from './configuration.service';
@@ -19,6 +20,7 @@ import {
   FormFieldsDto,
   CalendlyDto,
   SchedulingPreferenceDto,
+  ActivateWorkflowDto,
 } from '../dto';
 
 @Injectable()
@@ -102,6 +104,7 @@ export class OnboardingService {
         success: true,
         data: {
           workflowId: existingWorkflow.id,
+          workspaceId: workspace.id,
           configurationSchema: unifiedSchema,
         },
       };
@@ -266,6 +269,7 @@ export class OnboardingService {
       success: true,
       data: {
         workflowId: workflow.id,
+        workspaceId: workspace.id,
         configurationSchema: unifiedSchema,
       },
     };
@@ -589,6 +593,43 @@ export class OnboardingService {
       data: formFieldsData,
     });
 
+    // Save form settings (header, description, submit button, success message)
+    if (dto.settings) {
+      const workflowSettings = (workflow.settings as any) || {};
+
+      await this.prisma.workflow.update({
+        where: { id: dto.workflowId },
+        data: {
+          // Save header and description to dedicated columns
+          formHeader: dto.settings.formHeader || null,
+          formHeaderRich:
+            dto.settings.formHeaderRich === undefined
+              ? undefined
+              : dto.settings.formHeaderRich || Prisma.JsonNull,
+          showFormHeader: dto.settings.showFormHeader ?? true,
+          formDescription: dto.settings.formDescription || null,
+          formDescriptionRich:
+            dto.settings.formDescriptionRich === undefined
+              ? undefined
+              : dto.settings.formDescriptionRich || Prisma.JsonNull,
+          showFormDescription: dto.settings.showFormDescription ?? true,
+          // Save submit button and success message to workflow.settings JSON
+          settings: {
+            ...workflowSettings,
+            form: {
+              ...(workflowSettings.form || {}),
+              submitButtonText:
+                dto.settings.submitButtonText || 'Submit',
+              successMessage:
+                dto.settings.successMessage ||
+                "Thank you! We'll be in touch soon.",
+              redirectUrl: dto.settings.redirectUrl || null,
+            },
+          },
+        },
+      });
+    }
+
     // Mark Step 2 (Form Builder) as complete in onboarding session
     const session = await this.getSession(userId);
     if (session) {
@@ -749,6 +790,24 @@ export class OnboardingService {
     ];
     const availableVariables = allVariables;
 
+    // Get workflow settings from workflow.settings.form
+    const workflowSettings = (workflow.settings as any)?.form || {};
+    const formSettings = {
+      // Form header and description from dedicated columns
+      formHeader: workflow.formHeader || null,
+      formHeaderRich: workflow.formHeaderRich || null,
+      showFormHeader: workflow.showFormHeader ?? true,
+      formDescription: workflow.formDescription || null,
+      formDescriptionRich: workflow.formDescriptionRich || null,
+      showFormDescription: workflow.showFormDescription ?? true,
+      // Submit button and success message from workflow.settings
+      submitButtonText: workflowSettings.submitButtonText || 'Submit',
+      successMessage:
+        workflowSettings.successMessage ||
+        "Thank you! We'll be in touch soon.",
+      redirectUrl: workflowSettings.redirectUrl || undefined,
+    };
+
     this.logger.log(
       `Retrieved ${formFields.length} form fields for workflow ${workflowId}`,
     );
@@ -757,8 +816,11 @@ export class OnboardingService {
       success: true,
       data: {
         workflowId,
+        workflowName: workflow.name,
+        workflowStatus: workflow.status,
         formFields,
         availableVariables,
+        settings: formSettings,
       },
     };
   }
@@ -811,6 +873,7 @@ export class OnboardingService {
 
     // Save Calendly link using OAuth service
     await this.oauthService.saveCalendlyLink(
+      userId,
       workflow.workspaceId,
       dto.calendlyLink,
     );
@@ -892,6 +955,7 @@ export class OnboardingService {
     // If Calendly, save the link
     if (dto.schedulingType === 'CALENDLY' && dto.calendlyLink) {
       await this.oauthService.saveCalendlyLink(
+        userId,
         workflow.workspaceId,
         dto.calendlyLink,
       );
@@ -980,6 +1044,24 @@ export class OnboardingService {
         completedSteps: [...new Set([...stepsToComplete, 4])],
       },
     });
+
+    // Update workflow with configuration data
+    const workflow = await this.prisma.workflow.findFirst({
+      where: { workspaceId: session.workspaceId },
+    });
+
+    if (workflow) {
+      await this.prisma.workflow.update({
+        where: { id: workflow.id },
+        data: {
+          configurationData: dto.configuration as any,
+        },
+      });
+
+      this.logger.log(
+        `Saved configuration to workflow ${workflow.id}`,
+      );
+    }
 
     return {
       success: true,
@@ -1256,6 +1338,111 @@ export class OnboardingService {
     });
 
     return workspace;
+  }
+
+  /**
+   * Step 6: Activate workflow and complete onboarding
+   */
+  async activateWorkflow(userId: string, dto: ActivateWorkflowDto) {
+    // Get onboarding session
+    const session = await this.prisma.onboardingSession.findUnique({
+      where: { id: dto.configurationId },
+      include: {
+        workspace: true,
+      },
+    });
+
+    if (!session || session.userId !== userId) {
+      throw new BadRequestException('Invalid configuration ID');
+    }
+
+    // Validate step progression - Step 5 (Simulation) should be complete
+    if (!session.completedSteps.includes(5)) {
+      throw new ForbiddenException(
+        'Please complete Step 5 (Simulation) first',
+      );
+    }
+
+    // Find the workflow associated with this workspace (draft status)
+    const workflow = await this.prisma.workflow.findFirst({
+      where: {
+        workspaceId: session.workspaceId,
+        status: 'draft',
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!workflow) {
+      throw new NotFoundException('Workflow not found');
+    }
+
+    // Validate form fields exist (minimum: name and email)
+    const formFieldCount = await this.prisma.formField.count({
+      where: { workflowId: workflow.id },
+    });
+
+    if (formFieldCount < 2) {
+      throw new BadRequestException(
+        'Workflow must have at least 2 form fields (name and email)',
+      );
+    }
+
+    // Validate configuration data exists
+    if (!session.configurationData) {
+      throw new BadRequestException(
+        'Configuration data is missing. Please complete configuration step.',
+      );
+    }
+
+    // Perform activation in a transaction
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. Update workflow status to active
+      const activatedWorkflow = await tx.workflow.update({
+        where: { id: workflow.id },
+        data: {
+          status: 'active',
+        },
+      });
+
+      // 2. Mark onboarding session as complete
+      await tx.onboardingSession.update({
+        where: { id: session.id },
+        data: {
+          isComplete: true,
+          completedAt: new Date(),
+          currentStep: 5, // Keep at step 5 (final step)
+        },
+      });
+
+      // 3. Mark user's onboarding as complete
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          hasCompletedOnboarding: true,
+          onboardingCompletedAt: new Date(),
+        },
+      });
+
+      return { workflow: activatedWorkflow, workspace: session.workspace };
+    });
+
+    // Generate public form URL
+    const frontendUrl = process.env.FRONTEND_URL;
+    const publicFormUrl = `${frontendUrl}/p/${result.workspace.slug}`;
+
+    this.logger.log(
+      `Workflow ${result.workflow.id} activated for user ${userId}`,
+    );
+
+    return {
+      success: true,
+      data: {
+        workflowId: result.workflow.id,
+        publicFormUrl,
+        status: 'active' as const,
+        activatedAt: result.workflow.updatedAt.toISOString(),
+      },
+    };
   }
 
   /**

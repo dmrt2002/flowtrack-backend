@@ -1,0 +1,42 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.FormsModule = void 0;
+const common_1 = require("@nestjs/common");
+const jwt_1 = require("@nestjs/jwt");
+const prisma_module_1 = require("../../prisma/prisma.module");
+const workflows_module_1 = require("../workflows/workflows.module");
+const form_validation_service_1 = require("./services/form-validation.service");
+const form_submission_service_1 = require("./services/form-submission.service");
+const workflow_trigger_service_1 = require("./services/workflow-trigger.service");
+const public_form_controller_1 = require("./controllers/public-form.controller");
+const form_embed_controller_1 = require("./controllers/form-embed.controller");
+let FormsModule = class FormsModule {
+};
+exports.FormsModule = FormsModule;
+exports.FormsModule = FormsModule = __decorate([
+    (0, common_1.Module)({
+        imports: [
+            prisma_module_1.PrismaModule,
+            workflows_module_1.WorkflowsModule,
+            jwt_1.JwtModule.register({}),
+        ],
+        controllers: [public_form_controller_1.PublicFormController, form_embed_controller_1.FormEmbedController],
+        providers: [
+            form_validation_service_1.FormValidationService,
+            form_submission_service_1.FormSubmissionService,
+            workflow_trigger_service_1.WorkflowTriggerService,
+        ],
+        exports: [
+            form_validation_service_1.FormValidationService,
+            form_submission_service_1.FormSubmissionService,
+            workflow_trigger_service_1.WorkflowTriggerService,
+        ],
+    })
+], FormsModule);
+//# sourceMappingURL=forms.module.js.map

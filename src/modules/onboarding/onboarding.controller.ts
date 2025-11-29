@@ -19,6 +19,7 @@ import type {
   FormFieldsDto,
   CalendlyDto,
   SchedulingPreferenceDto,
+  ActivateWorkflowDto,
 } from './dto';
 import {
   strategySelectionSchema,
@@ -28,6 +29,7 @@ import {
   formFieldsSchema,
   calendlySchema,
   schedulingPreferenceSchema,
+  activateWorkflowSchema,
 } from './dto';
 
 @Controller('onboarding')
@@ -151,5 +153,18 @@ export class OnboardingController {
   @Get('status')
   async getStatus(@User() user: any) {
     return this.onboardingService.getOnboardingStatus(user.id);
+  }
+
+  /**
+   * POST /api/v1/onboarding/activate
+   * Step 6: Activate workflow and complete onboarding
+   */
+  @Post('activate')
+  async activateWorkflow(
+    @User() user: any,
+    @Body(new ZodValidationPipe(activateWorkflowSchema))
+    dto: ActivateWorkflowDto,
+  ) {
+    return this.onboardingService.activateWorkflow(user.id, dto);
   }
 }

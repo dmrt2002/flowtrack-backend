@@ -1,8 +1,16 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 export interface UserPayload {
-  authId: string;
-  sessionId?: string;
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  avatarUrl: string | null;
+  authProvider: string;
+  emailVerifiedAt: Date | null;
+  createdAt: Date;
+  hasCompletedOnboarding: boolean | null;
+  onboardingCompletedAt: Date | null;
 }
 
 export const User = createParamDecorator(

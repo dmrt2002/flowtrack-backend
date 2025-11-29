@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { BullModule } from '@nestjs/bullmq';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PrismaModule } from './prisma/prisma.module';
@@ -10,6 +11,15 @@ import { TaskModule } from './task/task.module';
 import { OnboardingModule } from './modules/onboarding/onboarding.module';
 import { OAuthModule } from './modules/oauth/oauth.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
+import { BookingModule } from './modules/booking/booking.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { FormsModule } from './modules/forms/forms.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { LeadsModule } from './modules/leads/leads.module';
+import { WorkflowsModule } from './modules/workflows/workflows.module';
+import { UserModule } from './modules/user/user.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -17,6 +27,21 @@ import { CalendarModule } from './modules/calendar/calendar.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+    }),
+
+    // Schedule module for cron jobs
+    ScheduleModule.forRoot(),
+
+    // BullMQ (Redis-based queue)
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        connection: {
+          host: config.get('REDIS_HOST', 'localhost'),
+          port: config.get('REDIS_PORT', 6379),
+          password: config.get('REDIS_PASSWORD'),
+        },
+      }),
     }),
 
     // Database
@@ -30,6 +55,14 @@ import { CalendarModule } from './modules/calendar/calendar.module';
     OnboardingModule,
     OAuthModule,
     CalendarModule,
+    BookingModule,
+    DashboardModule,
+    FormsModule,
+    AnalyticsModule,
+    LeadsModule,
+    WorkflowsModule,
+    UserModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

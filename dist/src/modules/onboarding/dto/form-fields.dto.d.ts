@@ -1,0 +1,90 @@
+import { z } from 'zod';
+declare const formFieldSchema: z.ZodObject<{
+    id: z.ZodOptional<z.ZodString>;
+    fieldKey: z.ZodString;
+    label: z.ZodString;
+    fieldType: z.ZodEnum<{
+        TEXT: "TEXT";
+        EMAIL: "EMAIL";
+        NUMBER: "NUMBER";
+        DROPDOWN: "DROPDOWN";
+        TEXTAREA: "TEXTAREA";
+        DATE: "DATE";
+        CHECKBOX: "CHECKBOX";
+    }>;
+    placeholder: z.ZodOptional<z.ZodString>;
+    helpText: z.ZodOptional<z.ZodString>;
+    isRequired: z.ZodDefault<z.ZodBoolean>;
+    options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        value: z.ZodString;
+        label: z.ZodString;
+    }, z.core.$strip>>>;
+    validationRules: z.ZodOptional<z.ZodObject<{
+        minLength: z.ZodOptional<z.ZodNumber>;
+        maxLength: z.ZodOptional<z.ZodNumber>;
+        min: z.ZodOptional<z.ZodNumber>;
+        max: z.ZodOptional<z.ZodNumber>;
+        pattern: z.ZodOptional<z.ZodString>;
+        step: z.ZodOptional<z.ZodNumber>;
+        minDate: z.ZodOptional<z.ZodString>;
+        maxDate: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+    displayOrder: z.ZodNumber;
+    isDefault: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strip>;
+export declare const formFieldsSchema: z.ZodObject<{
+    workflowId: z.ZodString;
+    formFields: z.ZodArray<z.ZodObject<{
+        id: z.ZodOptional<z.ZodString>;
+        fieldKey: z.ZodString;
+        label: z.ZodString;
+        fieldType: z.ZodEnum<{
+            TEXT: "TEXT";
+            EMAIL: "EMAIL";
+            NUMBER: "NUMBER";
+            DROPDOWN: "DROPDOWN";
+            TEXTAREA: "TEXTAREA";
+            DATE: "DATE";
+            CHECKBOX: "CHECKBOX";
+        }>;
+        placeholder: z.ZodOptional<z.ZodString>;
+        helpText: z.ZodOptional<z.ZodString>;
+        isRequired: z.ZodDefault<z.ZodBoolean>;
+        options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+        }, z.core.$strip>>>;
+        validationRules: z.ZodOptional<z.ZodObject<{
+            minLength: z.ZodOptional<z.ZodNumber>;
+            maxLength: z.ZodOptional<z.ZodNumber>;
+            min: z.ZodOptional<z.ZodNumber>;
+            max: z.ZodOptional<z.ZodNumber>;
+            pattern: z.ZodOptional<z.ZodString>;
+            step: z.ZodOptional<z.ZodNumber>;
+            minDate: z.ZodOptional<z.ZodString>;
+            maxDate: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
+        displayOrder: z.ZodNumber;
+        isDefault: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strip>>;
+    settings: z.ZodOptional<z.ZodObject<{
+        formHeader: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        formHeaderRich: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+            type: z.ZodLiteral<"doc">;
+            content: z.ZodOptional<z.ZodArray<z.ZodAny>>;
+        }, z.core.$strip>>>;
+        showFormHeader: z.ZodDefault<z.ZodBoolean>;
+        formDescription: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+        formDescriptionRich: z.ZodNullable<z.ZodOptional<z.ZodObject<{
+            type: z.ZodLiteral<"doc">;
+            content: z.ZodOptional<z.ZodArray<z.ZodAny>>;
+        }, z.core.$strip>>>;
+        showFormDescription: z.ZodDefault<z.ZodBoolean>;
+        submitButtonText: z.ZodOptional<z.ZodString>;
+        successMessage: z.ZodOptional<z.ZodString>;
+        redirectUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    }, z.core.$strip>>;
+}, z.core.$strip>;
+export type FormFieldsDto = z.infer<typeof formFieldsSchema>;
+export type FormFieldDto = z.infer<typeof formFieldSchema>;
+export {};

@@ -106,7 +106,7 @@ export const UNIFIED_CONFIG_SCHEMA: ConfigSchema = {
       type: 'textarea',
       label: 'What should the first email say?',
       placeholder:
-        "Hi {firstName},\n\nThanks for reaching out! I noticed you're interested in [topic]. I'd love to learn more about what you're looking for.\n\nCan you tell me a bit about your current challenges?\n\nBest,\n[Your Name]",
+        "Hi {firstName},\n\nThanks for reaching out! I noticed you're interested in [topic]. I'd love to learn more about what you're looking for.\n\nCan you tell me a bit about your current challenges?\n\nYou can grab a time on my calendar here: {bookingUrl}\n\nBest,\n[Your Name]",
       required: true,
       rows: 8,
       validation: { minLength: 50, maxLength: 1000 },
@@ -123,10 +123,6 @@ export const UNIFIED_CONFIG_SCHEMA: ConfigSchema = {
       conditionMetadata: {
         availableFields: [], // Will be populated dynamically from form fields
         operators: ['>', '<', '>=', '<=', '==', '!='],
-        defaultField: 'budget',
-        defaultOperator: '>',
-        defaultValue: 1000,
-        defaultCurrency: 'USD',
       },
     },
     {
@@ -144,7 +140,7 @@ export const UNIFIED_CONFIG_SCHEMA: ConfigSchema = {
       type: 'textarea',
       label: 'Follow-up email template',
       placeholder:
-        "Hi {firstName},\n\nI wanted to follow up on my previous email. Are you still interested in learning more about how we can help?\n\nIf so, I'd love to schedule a quick call to discuss your needs and see if we're a good fit.\n\nBest,\n[Your Name]",
+        "Hi {firstName},\n\nI wanted to follow up on my previous email. Are you still interested in learning more about how we can help?\n\nIf so, I'd love to schedule a quick call to discuss your needs and see if we're a good fit.\n\nYou can pick a time that works for you here: {bookingUrl}\n\nBest,\n[Your Name]",
       required: true,
       rows: 6,
       validation: { minLength: 30, maxLength: 500 },
@@ -233,7 +229,7 @@ const INBOUND_LEADS_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'What should the first email say?',
         placeholder:
-          "Hi {firstName},\n\nThanks for reaching out! I noticed you're interested in [topic]. I'd love to learn more about what you're looking for.\n\nCan you tell me a bit about your current challenges?\n\nBest,\n[Your Name]",
+          "Hi {firstName},\n\nThanks for reaching out! I noticed you're interested in [topic]. I'd love to learn more about what you're looking for.\n\nCan you tell me a bit about your current challenges?\n\nYou can grab a time on my calendar here: {bookingUrl}\n\nBest,\n[Your Name]",
         required: true,
         rows: 8,
         validation: { minLength: 50, maxLength: 1000 },
@@ -345,7 +341,7 @@ const OUTBOUND_SALES_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'First outreach email',
         placeholder:
-          "Hi {firstName},\n\nI noticed {companyName} is in the {industry} space. I'm curious - how does your team currently handle [specific problem]?\n\nWe help similar companies [value proposition]. Would it make sense to chat for 10 minutes?\n\nBest,\n[Your Name]",
+          "Hi {firstName},\n\nI noticed {companyName} is in the {industry} space. I'm curious - how does your team currently handle [specific problem]?\n\nWe help similar companies [value proposition]. Would it make sense to chat for 10 minutes?\n\nGrab time on my calendar here: {bookingUrl}\n\nBest,\n[Your Name]",
         required: true,
         rows: 8,
         validation: { minLength: 50, maxLength: 800 },
@@ -367,7 +363,7 @@ const OUTBOUND_SALES_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'Follow-up email if no response',
         placeholder:
-          "Hi {firstName},\n\nI know you're busy! Just wanted to bump this up in your inbox.\n\nStill curious about your approach to [problem]. Worth a quick call?\n\nCheers,\n[Your Name]",
+          "Hi {firstName},\n\nI know you're busy! Just wanted to bump this up in your inbox.\n\nStill curious about your approach to [problem]. Worth a quick call?\n\nHere's my booking link if you'd like to chat: {bookingUrl}\n\nCheers,\n[Your Name]",
         required: true,
         rows: 6,
         validation: { minLength: 30, maxLength: 500 },
@@ -464,7 +460,7 @@ const CUSTOMER_NURTURE_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'Check-in email template',
         placeholder:
-          "Hey {firstName}!\n\nHow are things going with {productName}? I noticed you haven't [specific action] yet.\n\nNeed any help getting started? I'm here if you have questions!\n\nCheers,\n[Your Name]",
+          "Hey {firstName}!\n\nHow are things going with {productName}? I noticed you haven't [specific action] yet.\n\nNeed any help getting started? I'm here if you have questions!\n\nFeel free to grab time with me here: {bookingUrl}\n\nCheers,\n[Your Name]",
         required: true,
         rows: 7,
         validation: { minLength: 50, maxLength: 800 },
@@ -505,7 +501,7 @@ const CUSTOMER_NURTURE_TEMPLATE: StrategyTemplate = {
         type: 'textarea',
         label: 'Win-back email for inactive customers',
         placeholder:
-          "Hi {firstName},\n\nI noticed you haven't been using {productName} lately. Everything okay?\n\nIf there's something we can improve or if you're stuck, I'd love to help.\n\nBest,\n[Your Name]",
+          "Hi {firstName},\n\nI noticed you haven't been using {productName} lately. Everything okay?\n\nIf there's something we can improve or if you're stuck, I'd love to help.\n\nYou can book a quick call with me here: {bookingUrl}\n\nBest,\n[Your Name]",
         required: false,
         rows: 6,
         validation: { maxLength: 700 },

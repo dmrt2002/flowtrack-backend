@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PasswordService } from './services/password.service';
@@ -9,10 +10,12 @@ import { TokenService } from './services/token.service';
 import { EmailService } from './services/email.service';
 import { RateLimitService } from './services/rate-limit.service';
 import { UnifiedAuthGuard } from './guards/unified-auth.guard';
+import { GoogleStrategy } from './strategies/google.strategy';
 
 @Module({
   imports: [
     ConfigModule,
+    PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -31,6 +34,7 @@ import { UnifiedAuthGuard } from './guards/unified-auth.guard';
     TokenService,
     EmailService,
     RateLimitService,
+    GoogleStrategy,
     UnifiedAuthGuard,
     {
       provide: APP_GUARD,

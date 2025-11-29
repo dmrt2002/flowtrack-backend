@@ -1,10 +1,12 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { google } from 'googleapis';
+import axios from 'axios';
 
 @Injectable()
 export class OAuthService {
+  private readonly logger = new Logger(OAuthService.name);
   private oauth2Client: any;
 
   constructor(
@@ -127,6 +129,7 @@ export class OAuthService {
       // Create new credential
       return this.prisma.oAuthCredential.create({
         data: {
+          userId,
           workspaceId: workspace.id,
           providerType: 'GOOGLE_EMAIL',
           providerEmail: email,
@@ -247,7 +250,7 @@ export class OAuthService {
   /**
    * Save Calendly link for workspace
    */
-  async saveCalendlyLink(workspaceId: string, calendlyLink: string) {
+  async saveCalendlyLink(userId: string, workspaceId: string, calendlyLink: string) {
     // Check if Calendly credential already exists
     const existingCredential = await this.prisma.oAuthCredential.findFirst({
       where: {
@@ -269,6 +272,7 @@ export class OAuthService {
       // Create new credential
       return this.prisma.oAuthCredential.create({
         data: {
+          userId,
           workspaceId,
           providerType: 'CALENDLY',
           accessToken: calendlyLink, // Store link in accessToken field
@@ -290,7 +294,118 @@ export class OAuthService {
       },
     });
 
-    return credential?.accessToken || null;
+    if (!credential) {
+      return null;
+    }
+
+    // Check if scheduling URL is cached in metadata
+    const metadata = credential.metadata as any;
+    if (metadata?.schedulingUrl) {
+      return metadata.schedulingUrl;
+    }
+
+    // Not cached - fetch it now with auto-refreshed token
+    this.logger.log(
+      `Scheduling URL not cached for workspace ${workspaceId}. Fetching from Calendly API...`,
+    );
+
+    try {
+      let accessToken = credential.accessToken;
+
+      // Check if token is expired
+      const isExpired = credential.expiresAt
+        ? credential.expiresAt < new Date()
+        : false;
+
+      // If expired, refresh it
+      if (isExpired && credential.refreshToken) {
+        this.logger.log(
+          `Access token expired. Refreshing token for credential ${credential.id}...`,
+        );
+
+        const clientId = this.config.get<string>('CALENDLY_CLIENT_ID');
+        const clientSecret = this.config.get<string>('CALENDLY_CLIENT_SECRET');
+
+        if (!clientId || !clientSecret) {
+          throw new Error('Calendly OAuth credentials not configured');
+        }
+
+        const refreshResponse = await axios.post(
+          'https://auth.calendly.com/oauth/token',
+          {
+            grant_type: 'refresh_token',
+            refresh_token: credential.refreshToken,
+          },
+          {
+            auth: {
+              username: clientId,
+              password: clientSecret,
+            },
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+        );
+
+        const { access_token, refresh_token, expires_in } =
+          refreshResponse.data;
+
+        // Update credential with new tokens
+        await this.prisma.oAuthCredential.update({
+          where: { id: credential.id },
+          data: {
+            accessToken: access_token,
+            refreshToken: refresh_token || credential.refreshToken,
+            expiresAt: new Date(Date.now() + expires_in * 1000),
+          },
+        });
+
+        accessToken = access_token;
+        this.logger.log(`Successfully refreshed token for credential ${credential.id}`);
+      }
+
+      // Fetch user info from Calendly
+      const userResponse = await axios.get(
+        'https://api.calendly.com/users/me',
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      const schedulingUrl =
+        userResponse.data.resource.scheduling_url ||
+        userResponse.data.resource.link;
+
+      if (schedulingUrl) {
+        // Cache it in metadata for future use
+        await this.prisma.oAuthCredential.update({
+          where: { id: credential.id },
+          data: {
+            metadata: {
+              ...metadata,
+              schedulingUrl,
+            } as any,
+          },
+        });
+
+        this.logger.log(
+          `Successfully fetched and cached scheduling URL for workspace ${workspaceId}: ${schedulingUrl}`,
+        );
+        return schedulingUrl;
+      }
+
+      this.logger.warn(
+        `No scheduling URL found in Calendly API response for workspace ${workspaceId}`,
+      );
+      return null;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to fetch Calendly scheduling URL for workspace ${workspaceId}: ${error.response?.data?.message || error.message}`,
+      );
+      return null;
+    }
   }
 
   /**

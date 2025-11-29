@@ -6,7 +6,6 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { createClerkClient } from '@clerk/clerk-sdk-node';
 import { ConfigService } from '@nestjs/config';
 import { PasswordService } from './services/password.service';
 import { TokenService } from './services/token.service';
@@ -17,7 +16,6 @@ import type { RegisterDto } from './dto';
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
-  private clerkClient: ReturnType<typeof createClerkClient>;
 
   constructor(
     private prisma: PrismaService,
@@ -26,102 +24,7 @@ export class AuthService {
     private tokenService: TokenService,
     private emailService: EmailService,
     private rateLimitService: RateLimitService,
-  ) {
-    const secretKey = this.configService.get<string>('CLERK_SECRET_KEY');
-    if (!secretKey) {
-      throw new Error('CLERK_SECRET_KEY is not configured');
-    }
-    this.clerkClient = createClerkClient({ secretKey });
-  }
-
-  /**
-   * Get or create a user in our database based on Clerk auth ID
-   */
-  async getOrCreateUser(authId: string) {
-    // Check if user exists in our database
-    let user = await this.prisma.user.findUnique({
-      where: { clerkUserId: authId },
-    });
-
-    if (user) {
-      return user;
-    }
-
-    // If not, fetch from Clerk and create
-    try {
-      const clerkUser = await this.clerkClient.users.getUser(authId);
-
-      const email =
-        clerkUser.emailAddresses.find(
-          (e: any) => e.id === clerkUser.primaryEmailAddressId,
-        )?.emailAddress || clerkUser.emailAddresses[0]?.emailAddress;
-
-      if (!email) {
-        throw new Error('User has no email address');
-      }
-
-      user = await this.prisma.user.create({
-        data: {
-          clerkUserId: authId,
-          email,
-          firstName: clerkUser.firstName || null,
-          lastName: clerkUser.lastName || null,
-          avatarUrl: clerkUser.imageUrl || null,
-          authProvider: 'clerk',
-          emailVerifiedAt: new Date(), // Clerk users are pre-verified
-        },
-      });
-
-      this.logger.log(`Created new user: ${user.id} (${email})`);
-      return user;
-    } catch (error) {
-      this.logger.error(`Failed to create user from Clerk: ${authId}`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Sync user data from Clerk (useful for webhooks)
-   */
-  async syncUserFromClerk(authId: string) {
-    try {
-      const clerkUser = await this.clerkClient.users.getUser(authId);
-
-      const email =
-        clerkUser.emailAddresses.find(
-          (e: any) => e.id === clerkUser.primaryEmailAddressId,
-        )?.emailAddress || clerkUser.emailAddresses[0]?.emailAddress;
-
-      if (!email) {
-        throw new Error('User has no email address');
-      }
-
-      const user = await this.prisma.user.upsert({
-        where: { clerkUserId: authId },
-        update: {
-          email,
-          firstName: clerkUser.firstName || null,
-          lastName: clerkUser.lastName || null,
-          avatarUrl: clerkUser.imageUrl || null,
-        },
-        create: {
-          clerkUserId: authId,
-          email,
-          firstName: clerkUser.firstName || null,
-          lastName: clerkUser.lastName || null,
-          avatarUrl: clerkUser.imageUrl || null,
-          authProvider: 'clerk',
-          emailVerifiedAt: new Date(),
-        },
-      });
-
-      this.logger.log(`Synced user: ${user.id} (${email})`);
-      return user;
-    } catch (error) {
-      this.logger.error(`Failed to sync user from Clerk: ${authId}`, error);
-      throw error;
-    }
-  }
+  ) {}
 
   /**
    * Register a new user with email/password (Native Auth)
@@ -277,6 +180,7 @@ export class AuthService {
       lastName: user.lastName,
       avatarUrl: user.avatarUrl,
       authProvider: user.authProvider,
+      hasCompletedOnboarding: user.hasCompletedOnboarding,
     };
   }
 
@@ -434,7 +338,17 @@ export class AuthService {
   /**
    * Verify email address
    */
-  async verifyEmail(token: string): Promise<{ message: string }> {
+  async verifyEmail(
+    token: string,
+    ipAddress: string,
+    userAgent: string | null,
+  ): Promise<{
+    message: string;
+    user: any;
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: Date;
+  }> {
     const user = await this.prisma.user.findFirst({
       where: {
         emailVerificationToken: token,
@@ -451,11 +365,24 @@ export class AuthService {
     }
 
     if (user.emailVerifiedAt) {
-      return { message: 'Email already verified' };
+      // Already verified - generate tokens and log them in anyway
+      this.logger.log(`Email already verified for user: ${user.id}, logging in...`);
+      const tokens = await this.generateTokensForUser(
+        user.id,
+        user.email,
+        ipAddress,
+        userAgent,
+      );
+
+      return {
+        message: 'Email already verified',
+        user,
+        ...tokens,
+      };
     }
 
     // Mark email as verified
-    await this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id: user.id },
       data: {
         emailVerifiedAt: new Date(),
@@ -476,7 +403,19 @@ export class AuthService {
 
     this.logger.log(`Email verified for user: ${user.id} (${user.email})`);
 
-    return { message: 'Email verified successfully. You can now login.' };
+    // Generate tokens to automatically log the user in
+    const tokens = await this.generateTokensForUser(
+      updatedUser.id,
+      updatedUser.email,
+      ipAddress,
+      userAgent,
+    );
+
+    return {
+      message: 'Email verified successfully. You are now logged in.',
+      user: updatedUser,
+      ...tokens,
+    };
   }
 
   /**
@@ -522,6 +461,72 @@ export class AuthService {
 
     return {
       message: 'If the email exists, a verification link has been sent.',
+    };
+  }
+
+  /**
+   * Google OAuth Authentication
+   * Find or create user from Google profile
+   */
+  async googleAuth(
+    googleProfile: {
+      googleId: string;
+      email: string;
+      firstName?: string;
+      lastName?: string;
+      picture?: string;
+    },
+    ipAddress: string,
+    userAgent: string | null,
+  ) {
+    this.logger.log(`🔐 Google OAuth login attempt for: ${googleProfile.email}`);
+
+    // Find existing user by googleId or email
+    let user = await this.prisma.user.findFirst({
+      where: {
+        OR: [{ googleId: googleProfile.googleId }, { email: googleProfile.email }],
+      },
+    });
+
+    if (!user) {
+      // Create new user
+      this.logger.log(`Creating new user from Google OAuth: ${googleProfile.email}`);
+      user = await this.prisma.user.create({
+        data: {
+          googleId: googleProfile.googleId,
+          email: googleProfile.email,
+          firstName: googleProfile.firstName,
+          lastName: googleProfile.lastName,
+          avatarUrl: googleProfile.picture,
+          authProvider: 'google',
+          emailVerifiedAt: new Date(), // Google users are pre-verified
+        },
+      });
+    } else if (!user.googleId) {
+      // Link Google account to existing email/password account
+      this.logger.log(`Linking Google account to existing user: ${user.email}`);
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          googleId: googleProfile.googleId,
+          avatarUrl: googleProfile.picture || user.avatarUrl,
+        },
+      });
+    }
+
+    // Generate JWT tokens
+    const tokens = await this.generateTokensForUser(
+      user.id,
+      user.email,
+      ipAddress,
+      userAgent,
+    );
+
+    this.logger.log(`✅ Google OAuth successful for user: ${user.email}`);
+
+    return {
+      user,
+      ...tokens,
     };
   }
 

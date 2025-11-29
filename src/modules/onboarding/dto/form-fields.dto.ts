@@ -56,6 +56,33 @@ const formFieldSchema = z.object({
 });
 
 /**
+ * TipTap JSON structure validation for rich text content
+ */
+const richTextJsonSchema = z.object({
+  type: z.literal('doc'),
+  content: z.array(z.any()).optional(),
+});
+
+/**
+ * Form Settings Schema
+ * For form header, description, submit button text, and success message
+ */
+const formSettingsSchema = z.object({
+  // Form header
+  formHeader: z.string().max(500).optional().nullable(),
+  formHeaderRich: richTextJsonSchema.optional().nullable(),
+  showFormHeader: z.boolean().default(true),
+  // Form description
+  formDescription: z.string().max(2000).optional().nullable(),
+  formDescriptionRich: richTextJsonSchema.optional().nullable(),
+  showFormDescription: z.boolean().default(true),
+  // Submit button and success message
+  submitButtonText: z.string().min(1).max(50).optional(),
+  successMessage: z.string().min(1).max(500).optional(),
+  redirectUrl: z.string().url().optional().nullable(),
+});
+
+/**
  * Form Fields DTO Schema
  * For saving form field configurations
  * Note: Empty array is allowed since default fields (name, email, companyName) are always present
@@ -96,6 +123,8 @@ export const formFieldsSchema = z.object({
         message: 'DROPDOWN fields must have at least 2 options with both value and label',
       },
     ),
+  // Form settings (optional, can be saved separately or together)
+  settings: formSettingsSchema.optional(),
 });
 
 export type FormFieldsDto = z.infer<typeof formFieldsSchema>;

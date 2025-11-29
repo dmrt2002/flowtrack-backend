@@ -36,12 +36,12 @@ RUN npm ci --only=production && \
 # Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
-# Expose port
-EXPOSE 3000
+# Expose port (default, can be overridden)
+EXPOSE ${PORT:-3000}
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+  CMD node -e "require('http').get('http://localhost:' + (process.env.PORT || 3000) + '/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start the application
 CMD ["npm", "run", "start:prod"]

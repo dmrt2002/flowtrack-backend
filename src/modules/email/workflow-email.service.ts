@@ -2,9 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { OAuthService } from '../oauth/oauth.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EmailTrackingService } from './services/email-tracking.service';
 import { google } from 'googleapis';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import type { EmailTrackingPayload } from './dto/email-tracking.dto';
 
 export interface SendWorkflowEmailDto {
   to: string;
@@ -27,6 +29,7 @@ export class WorkflowEmailService {
     private oauthService: OAuthService,
     private configService: ConfigService,
     private prisma: PrismaService,
+    private emailTrackingService: EmailTrackingService,
   ) {
     this.initializeSystemTransporter();
   }
@@ -220,7 +223,9 @@ export class WorkflowEmailService {
   insertCalendlyLink(template: string, calendlyLink: string | null): string {
     if (!calendlyLink) {
       // Remove calendly placeholder if no link provided
-      return template.replace(/\{calendlyLink\}/g, '');
+      return template
+        .replace(/\{calendlyLink\}/g, '')
+        .replace(/\{bookingUrl\}/g, '');
     }
 
     // Replace placeholder with formatted link
@@ -233,7 +238,9 @@ export class WorkflowEmailService {
       </div>
     `;
 
-    return template.replace(/\{calendlyLink\}/g, calendlyHtml);
+    return template
+      .replace(/\{calendlyLink\}/g, calendlyHtml)
+      .replace(/\{bookingUrl\}/g, calendlyHtml);
   }
 
   /**
@@ -243,7 +250,10 @@ export class WorkflowEmailService {
   insertMeetLink(template: string, meetLink: string | null): string {
     if (!meetLink) {
       // Remove meet link placeholders if no link provided
-      return template.replace(/\{meetLink\}/g, '').replace(/\{calendlyLink\}/g, '');
+      return template
+        .replace(/\{meetLink\}/g, '')
+        .replace(/\{calendlyLink\}/g, '')
+        .replace(/\{bookingUrl\}/g, '');
     }
 
     // Replace placeholder with formatted link
@@ -259,7 +269,8 @@ export class WorkflowEmailService {
     // Replace both {meetLink} and {calendlyLink} for backward compatibility
     return template
       .replace(/\{meetLink\}/g, meetHtml)
-      .replace(/\{calendlyLink\}/g, meetHtml);
+      .replace(/\{calendlyLink\}/g, meetHtml)
+      .replace(/\{bookingUrl\}/g, meetHtml);
   }
 
   /**
@@ -275,7 +286,8 @@ export class WorkflowEmailService {
       // Remove all scheduling placeholders if no link provided
       return template
         .replace(/\{calendlyLink\}/g, '')
-        .replace(/\{meetLink\}/g, '');
+        .replace(/\{meetLink\}/g, '')
+        .replace(/\{bookingUrl\}/g, '');
     }
 
     if (linkType === 'GOOGLE_MEET') {
@@ -287,11 +299,12 @@ export class WorkflowEmailService {
 
   /**
    * Build complete email from template with all substitutions
-   * Supports both Calendly and Google Meet scheduling links
+   * Supports Calendly and Google Meet scheduling links with attribution
    */
   async buildEmailFromTemplate(
     workspaceId: string,
     workflowId: string,
+    leadId: string, // NEW: Required for attribution
     template: string,
     variables: EmailTemplateVariables,
     meetLink?: string | null, // Optional: Google Meet link if already created
@@ -314,8 +327,11 @@ export class WorkflowEmailService {
       schedulingLink = null;
       linkType = 'GOOGLE_MEET';
     } else {
-      // Default to Calendly or if schedulingType is CALENDLY
-      schedulingLink = await this.oauthService.getCalendlyLink(workspaceId);
+      // Default to Calendly with attribution
+      schedulingLink = await this.generateCalendlyLinkWithAttribution(
+        leadId,
+        workspaceId,
+      );
       linkType = 'CALENDLY';
     }
 
@@ -323,13 +339,70 @@ export class WorkflowEmailService {
     let emailBody = this.insertSchedulingLink(
       template,
       schedulingLink,
-      linkType,
+      linkType as any,
     );
 
     // Then substitute other variables
     emailBody = this.renderTemplate(emailBody, variables);
 
     return emailBody;
+  }
+
+  /**
+   * Generate Calendly link with attribution (UTM parameter)
+   */
+  private async generateCalendlyLinkWithAttribution(
+    leadId: string,
+    workspaceId: string,
+  ): Promise<string | null> {
+    const baseLink = await this.oauthService.getCalendlyLink(workspaceId);
+
+    if (!baseLink) {
+      return null;
+    }
+
+    try {
+      const url = new URL(baseLink);
+      url.searchParams.set('utm_content', `lead_${leadId}`);
+      return url.toString();
+    } catch (error) {
+      this.logger.error('Failed to generate Calendly link with attribution:', error);
+      return baseLink; // Fallback to base link
+    }
+  }
+
+
+  /**
+   * Inject tracking pixel into HTML email
+   */
+  injectTrackingPixel(
+    htmlBody: string,
+    leadId: string,
+    workflowExecutionId: string,
+    emailType: 'welcome' | 'thank_you' | 'follow_up',
+  ): string {
+    // Generate tracking token
+    const trackingPayload: EmailTrackingPayload = {
+      leadId,
+      workflowExecutionId,
+      emailType,
+      sentAt: Date.now(),
+    };
+
+    const trackingToken = this.emailTrackingService.generateTrackingToken(trackingPayload);
+    const backendUrl = this.configService.get<string>('BACKEND_URL', 'http://localhost:3000');
+    const trackingPixelUrl = `${backendUrl}/api/v1/email/track/${trackingToken}`;
+
+    // Inject tracking pixel at the end of the HTML body
+    // The pixel is a 1x1 transparent image
+    const trackingPixelHtml = `<img src="${trackingPixelUrl}" width="1" height="1" style="display:none;" alt="" />`;
+
+    // Try to inject before closing </body> tag, otherwise append to end
+    if (htmlBody.includes('</body>')) {
+      return htmlBody.replace('</body>', `${trackingPixelHtml}</body>`);
+    } else {
+      return `${htmlBody}${trackingPixelHtml}`;
+    }
   }
 
   /**

@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   Query,
-  UseGuards,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -23,18 +22,12 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { User } from '../auth/decorators/user.decorator';
 import type { UserPayload } from '../auth/decorators/user.decorator';
-import { ClerkAuthGuard } from '../auth/guards/clerk-auth.guard';
-import { AuthService } from '../auth/auth.service';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
 @Controller('api/project')
-@UseGuards(ClerkAuthGuard)
 export class ProjectController {
-  constructor(
-    private readonly projectService: ProjectService,
-    private readonly authService: AuthService,
-  ) {}
+  constructor(private readonly projectService: ProjectService) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all projects for a workspace' })
@@ -48,10 +41,9 @@ export class ProjectController {
     description: 'List of projects',
   })
   async getWorkspaceProjects(
-    @User() userPayload: UserPayload,
+    @User() user: UserPayload,
     @Query('workspaceId') workspaceId: string,
   ) {
-    const user = await this.authService.getOrCreateUser(userPayload.authId);
     return this.projectService.getWorkspaceProjects(user.id, workspaceId);
   }
 
@@ -63,10 +55,9 @@ export class ProjectController {
   })
   @HttpCode(HttpStatus.CREATED)
   async createProject(
-    @User() userPayload: UserPayload,
+    @User() user: UserPayload,
     @Body() createProjectDto: CreateProjectDto,
   ) {
-    const user = await this.authService.getOrCreateUser(userPayload.authId);
     return this.projectService.createProject(user.id, createProjectDto);
   }
 
@@ -81,10 +72,9 @@ export class ProjectController {
     description: 'Project not found',
   })
   async getProjectById(
-    @User() userPayload: UserPayload,
+    @User() user: UserPayload,
     @Param('id') id: string,
   ) {
-    const user = await this.authService.getOrCreateUser(userPayload.authId);
     return this.projectService.getProjectById(user.id, id);
   }
 
@@ -95,11 +85,10 @@ export class ProjectController {
     description: 'Project updated successfully',
   })
   async updateProject(
-    @User() userPayload: UserPayload,
+    @User() user: UserPayload,
     @Param('id') id: string,
     @Body() updateProjectDto: UpdateProjectDto,
   ) {
-    const user = await this.authService.getOrCreateUser(userPayload.authId);
     return this.projectService.updateProject(user.id, id, updateProjectDto);
   }
 
@@ -115,10 +104,9 @@ export class ProjectController {
   })
   @HttpCode(HttpStatus.OK)
   async deleteProject(
-    @User() userPayload: UserPayload,
+    @User() user: UserPayload,
     @Param('id') id: string,
   ) {
-    const user = await this.authService.getOrCreateUser(userPayload.authId);
     return this.projectService.deleteProject(user.id, id);
   }
 }

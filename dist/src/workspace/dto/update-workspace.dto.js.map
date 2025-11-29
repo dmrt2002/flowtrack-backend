@@ -1,0 +1,1 @@
+{"version":3,"file":"update-workspace.dto.js","sourceRoot":"","sources":["../../../../src/workspace/dto/update-workspace.dto.ts"],"names":[],"mappings":";;;AAAA,6BAAwB;AAEX,QAAA,qBAAqB,GAAG,OAAC,CAAC,MAAM,CAAC;IAC5C,IAAI,EAAE,OAAC;SACJ,MAAM,EAAE;SACR,GAAG,CAAC,CAAC,EAAE,4BAA4B,CAAC;SACpC,GAAG,CAAC,GAAG,EAAE,+CAA+C,CAAC;SACzD,IAAI,EAAE;SACN,QAAQ,EAAE;CACd,CAAC,CAAC"}

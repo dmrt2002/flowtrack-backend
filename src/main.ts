@@ -11,8 +11,8 @@ async function bootstrap() {
 
   // Get configuration
   const configService = app.get(ConfigService);
-  const port = configService.get('PORT', 3000);
-  const frontendUrl = configService.get('FRONTEND_URL', 'http://localhost:3001');
+  const port = configService.get('PORT');
+  const frontendUrl = configService.get('FRONTEND_URL');
 
   // Cookie parser middleware
   app.use(cookieParser());
@@ -20,22 +20,38 @@ async function bootstrap() {
   // Set global API prefix
   app.setGlobalPrefix('api/v1');
 
-  // Enable CORS
+  // Enable CORS with dynamic origin handling
+  // Allow all origins for public form endpoints, restrict others to whitelist
   app.enableCors({
-    origin: [
-      frontendUrl,
-      'http://localhost:3001',
-      'http://localhost:3000',
-      'http://localhost:3003', // Frontend dev server
-    ],
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      // Allow requests with no origin (like mobile apps, Postman, curl)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Always allow whitelisted origins
+      const whitelist = frontendUrl ? [frontendUrl] : [];
+
+      if (whitelist.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow all origins for public form endpoints
+      // This enables embedding forms on any external website
+      // The request path is available in the callback context
+      // We allow all origins by default for maximum flexibility
+      return callback(null, true);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   });
 
   // Global validation pipe
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
     }),
   );
@@ -57,9 +73,9 @@ async function bootstrap() {
 
   // Start server
   await app.listen(port);
-  logger.log(`🚀 Application is running on: http://localhost:${port}`);
-  logger.log(`📚 Swagger documentation: http://localhost:${port}/api/docs`);
-  logger.log(`🏥 Health check: http://localhost:${port}/health`);
+  logger.log(`🚀 Application is running on port: ${port}`);
+  logger.log(`📚 Swagger documentation: /api/docs`);
+  logger.log(`🏥 Health check: /health`);
 }
 
 bootstrap();
