@@ -26,16 +26,15 @@ let PollingService = PollingService_1 = class PollingService {
         this.tokenManager = tokenManager;
     }
     async pollAllCalendlyFreeAccounts() {
-        this.logger.log('Starting Calendly FREE account polling');
+        this.logger.log('Starting Calendly account polling (all plans)');
         const credentials = await this.prisma.oAuthCredential.findMany({
             where: {
                 providerType: 'CALENDLY',
                 isActive: true,
                 pollingEnabled: true,
-                providerPlan: 'FREE',
             },
         });
-        this.logger.log(`Found ${credentials.length} Calendly FREE accounts to poll`);
+        this.logger.log(`Found ${credentials.length} Calendly accounts to poll`);
         for (const credential of credentials) {
             try {
                 const canPoll = await this.tokenManager.checkRateLimit(credential.id);
@@ -89,7 +88,7 @@ let PollingService = PollingService_1 = class PollingService {
                 this.logger.error(`Error processing credential ${credential.id} for polling:`, error);
             }
         }
-        this.logger.log('Calendly FREE account polling completed');
+        this.logger.log('Calendly account polling completed');
     }
     async getPollingStats(workspaceId) {
         const credentials = await this.prisma.oAuthCredential.findMany({

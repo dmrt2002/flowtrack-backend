@@ -37,36 +37,36 @@ export declare class AttributionMatcherService {
     updateLeadWithBooking(leadId: string, bookingId: string, eventId: string, status: 'scheduled' | 'canceled' | 'rescheduled' | 'completed'): Promise<void>;
     findBookingByProviderEventId(providerEventId: string, providerType: 'CALENDLY'): Promise<({
         lead: {
-            name: string | null;
             id: string;
-            deletedAt: Date | null;
-            createdAt: Date;
-            updatedAt: Date;
-            workspaceId: string;
-            status: import("@prisma/client").$Enums.LeadStatus;
-            tags: string[];
-            email: string;
             workflowId: string;
+            workspaceId: string;
+            email: string;
+            name: string | null;
             companyName: string | null;
             phone: string | null;
+            status: import("@prisma/client").$Enums.LeadStatus;
             source: import("@prisma/client").$Enums.LeadSource;
             sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
             score: number;
+            tags: string[];
             meetingEventId: string | null;
             meetingStatus: string | null;
             lastActivityAt: Date | null;
             lastEmailSentAt: Date | null;
             lastEmailOpenedAt: Date | null;
+            deletedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
         };
     } & {
         id: string;
+        workflowId: string | null;
+        workspaceId: string;
         createdAt: Date;
         updatedAt: Date;
-        workspaceId: string;
-        responses: import("@prisma/client/runtime/library").JsonValue | null;
-        providerType: import("@prisma/client").$Enums.OAuthProviderType;
-        workflowId: string | null;
         leadId: string;
+        providerType: import("@prisma/client").$Enums.OAuthProviderType;
+        responses: import("@prisma/client/runtime/library").JsonValue | null;
         attributionMethod: import("@prisma/client").$Enums.BookingAttributionMethod | null;
         utmContent: string | null;
         hiddenFieldValue: string | null;

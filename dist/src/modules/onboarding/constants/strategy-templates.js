@@ -68,17 +68,6 @@ exports.UNIFIED_CONFIG_SCHEMA = {
             helpText: 'Keep it conversational and ask an engaging question',
         },
         {
-            id: 'qualificationCriteria',
-            type: 'condition',
-            label: 'What makes a lead qualified? (optional)',
-            required: false,
-            helpText: 'Only applies if you have a numeric field in your form (e.g., budget). Leave empty to skip qualification.',
-            conditionMetadata: {
-                availableFields: [],
-                operators: ['>', '<', '>=', '<=', '==', '!='],
-            },
-        },
-        {
             id: 'followUpDelayDays',
             type: 'number',
             label: 'Days to wait before sending follow-up',

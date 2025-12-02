@@ -89,9 +89,33 @@ let UnifiedAuthGuard = UnifiedAuthGuard_1 = class UnifiedAuthGuard {
                 throw new common_1.UnauthorizedException('Email not verified. Please verify your email address.');
             }
             const { workspaceMemberships, ...userData } = user;
+            const workspaces = workspaceMemberships.map((m) => m.workspace);
+            let publicFormUrl = null;
+            if (workspaces.length > 0) {
+                const firstWorkspace = workspaces[0];
+                const activeWorkflow = await this.prisma.workflow.findFirst({
+                    where: {
+                        workspaceId: firstWorkspace.id,
+                        status: 'active',
+                        deletedAt: null,
+                    },
+                    select: {
+                        workspace: {
+                            select: {
+                                slug: true,
+                            },
+                        },
+                    },
+                });
+                if (activeWorkflow) {
+                    const frontendUrl = this.configService.get('FRONTEND_URL');
+                    publicFormUrl = `${frontendUrl}/p/${activeWorkflow.workspace.slug}`;
+                }
+            }
             request.user = {
                 ...userData,
-                workspaces: workspaceMemberships.map((m) => m.workspace),
+                workspaces,
+                publicFormUrl,
             };
             this.logger.debug(`✅ Authentication successful for: ${user.email}`);
             return true;

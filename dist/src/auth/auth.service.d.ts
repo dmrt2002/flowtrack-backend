@@ -60,11 +60,11 @@ export declare class AuthService {
         expiresAt: Date;
         user: {
             id: string;
-            isActive: boolean;
+            email: string;
             deletedAt: Date | null;
             createdAt: Date;
             updatedAt: Date;
-            email: string;
+            isActive: boolean;
             firstName: string | null;
             lastName: string | null;
             clerkUserId: string | null;

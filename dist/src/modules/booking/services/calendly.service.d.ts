@@ -28,21 +28,21 @@ export declare class CalendlyService {
     } | null>;
     saveCredentials(userId: string, workspaceId: string, accessToken: string, refreshToken: string, expiresAt: Date, organization: any, owner: any, planType: string): Promise<{
         id: string;
-        isActive: boolean;
+        workspaceId: string | null;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        workspaceId: string | null;
+        isActive: boolean;
         userId: string;
-        refreshToken: string | null;
-        expiresAt: Date | null;
-        accessToken: string;
-        scope: string | null;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerPlan: string | null;
         providerUserId: string | null;
         providerEmail: string | null;
+        accessToken: string;
+        refreshToken: string | null;
         tokenType: string;
+        expiresAt: Date | null;
+        scope: string | null;
         metadata: import("@prisma/client/runtime/library").JsonValue;
         webhookUrl: string | null;
         webhookSigningKey: string | null;

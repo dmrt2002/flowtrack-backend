@@ -12,6 +12,7 @@ const bullmq_1 = require("@nestjs/bullmq");
 const jwt_1 = require("@nestjs/jwt");
 const prisma_module_1 = require("../../prisma/prisma.module");
 const email_module_1 = require("../email/email.module");
+const email_relay_module_1 = require("../email-relay/email-relay.module");
 const workflows_controller_1 = require("./workflows.controller");
 const workflow_queue_service_1 = require("./services/workflow-queue.service");
 const workflow_executor_service_1 = require("./services/workflow-executor.service");
@@ -26,6 +27,7 @@ exports.WorkflowsModule = WorkflowsModule = __decorate([
         imports: [
             prisma_module_1.PrismaModule,
             email_module_1.EmailModule,
+            email_relay_module_1.EmailRelayModule,
             jwt_1.JwtModule.register({}),
             bullmq_1.BullModule.registerQueue({
                 name: 'workflow-execution',

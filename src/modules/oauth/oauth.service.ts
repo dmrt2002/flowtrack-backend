@@ -8,6 +8,7 @@ import axios from 'axios';
 export class OAuthService {
   private readonly logger = new Logger(OAuthService.name);
   private oauth2Client: any;
+  private oauthStateStore: Map<string, string> = new Map(); // userId -> workspaceId
 
   constructor(
     private prisma: PrismaService,
@@ -22,9 +23,27 @@ export class OAuthService {
   }
 
   /**
+   * Store OAuth state (userId -> workspaceId mapping)
+   */
+  storeOAuthState(userId: string, workspaceId: string): void {
+    this.oauthStateStore.set(userId, workspaceId);
+  }
+
+  /**
+   * Retrieve OAuth state (workspaceId from userId)
+   */
+  retrieveOAuthState(userId: string): string | null {
+    const workspaceId = this.oauthStateStore.get(userId);
+    if (workspaceId) {
+      this.oauthStateStore.delete(userId); // Clean up after retrieval
+    }
+    return workspaceId || null;
+  }
+
+  /**
    * Generate Google OAuth URL for Gmail access
    */
-  getGmailAuthUrl(): string {
+  getGmailAuthUrl(userId?: string): string {
     const scopes = [
       'https://www.googleapis.com/auth/gmail.send',
       'https://www.googleapis.com/auth/gmail.readonly',
@@ -36,6 +55,7 @@ export class OAuthService {
       access_type: 'offline',
       scope: scopes,
       prompt: 'consent', // Force consent to get refresh token
+      state: userId, // Pass userId in state for callback
     });
   }
 
@@ -78,37 +98,44 @@ export class OAuthService {
     accessToken: string,
     refreshToken: string | null | undefined,
     expiresAt: Date | null,
+    workspaceId?: string, // Optional: if provided from Settings redirect flow
   ) {
-    // Get user's workspace
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        ownedWorkspaces: true,
-        workspaceMemberships: {
-          include: {
-            workspace: true,
+    let targetWorkspaceId = workspaceId;
+
+    // If workspaceId not provided, get user's workspace
+    if (!targetWorkspaceId) {
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          ownedWorkspaces: true,
+          workspaceMemberships: {
+            include: {
+              workspace: true,
+            },
           },
         },
-      },
-    });
+      });
 
-    if (!user) {
-      throw new Error('User not found');
-    }
+      if (!user) {
+        throw new Error('User not found');
+      }
 
-    const workspace =
-      user.ownedWorkspaces[0] ||
-      user.workspaceMemberships[0]?.workspace ||
-      null;
+      const workspace =
+        user.ownedWorkspaces[0] ||
+        user.workspaceMemberships[0]?.workspace ||
+        null;
 
-    if (!workspace) {
-      throw new Error('No workspace found for user');
+      if (!workspace) {
+        throw new Error('No workspace found for user');
+      }
+
+      targetWorkspaceId = workspace.id;
     }
 
     // Check if credential already exists for this workspace
     const existingCredential = await this.prisma.oAuthCredential.findFirst({
       where: {
-        workspaceId: workspace.id,
+        workspaceId: targetWorkspaceId,
         providerType: 'GOOGLE_EMAIL',
       },
     });
@@ -130,7 +157,7 @@ export class OAuthService {
       return this.prisma.oAuthCredential.create({
         data: {
           userId,
-          workspaceId: workspace.id,
+          workspaceId: targetWorkspaceId,
           providerType: 'GOOGLE_EMAIL',
           providerEmail: email,
           accessToken,
@@ -414,5 +441,24 @@ export class OAuthService {
    */
   async getCalendarCredentials(workspaceId: string) {
     return this.getGmailCredentials(workspaceId);
+  }
+
+  /**
+   * Get Gmail connection status for a workspace
+   */
+  async getGmailConnectionStatus(workspaceId: string) {
+    const credential = await this.prisma.oAuthCredential.findFirst({
+      where: {
+        workspaceId,
+        providerType: 'GOOGLE_EMAIL',
+        isActive: true,
+      },
+    });
+
+    return {
+      connected: !!credential,
+      email: credential?.providerEmail || null,
+      lastUsedAt: credential?.lastUsedAt || null,
+    };
   }
 }

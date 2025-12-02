@@ -24,12 +24,23 @@ let OAuthService = OAuthService_1 = class OAuthService {
     config;
     logger = new common_1.Logger(OAuthService_1.name);
     oauth2Client;
+    oauthStateStore = new Map();
     constructor(prisma, config) {
         this.prisma = prisma;
         this.config = config;
         this.oauth2Client = new googleapis_1.google.auth.OAuth2(this.config.get('GOOGLE_CLIENT_ID'), this.config.get('GOOGLE_CLIENT_SECRET'), this.config.get('GOOGLE_REDIRECT_URI'));
     }
-    getGmailAuthUrl() {
+    storeOAuthState(userId, workspaceId) {
+        this.oauthStateStore.set(userId, workspaceId);
+    }
+    retrieveOAuthState(userId) {
+        const workspaceId = this.oauthStateStore.get(userId);
+        if (workspaceId) {
+            this.oauthStateStore.delete(userId);
+        }
+        return workspaceId || null;
+    }
+    getGmailAuthUrl(userId) {
         const scopes = [
             'https://www.googleapis.com/auth/gmail.send',
             'https://www.googleapis.com/auth/gmail.readonly',
@@ -40,6 +51,7 @@ let OAuthService = OAuthService_1 = class OAuthService {
             access_type: 'offline',
             scope: scopes,
             prompt: 'consent',
+            state: userId,
         });
     }
     async exchangeCodeForTokens(code) {
@@ -65,30 +77,34 @@ let OAuthService = OAuthService_1 = class OAuthService {
             throw new common_1.UnauthorizedException('Failed to authenticate with Google');
         }
     }
-    async saveGmailCredentials(userId, email, accessToken, refreshToken, expiresAt) {
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            include: {
-                ownedWorkspaces: true,
-                workspaceMemberships: {
-                    include: {
-                        workspace: true,
+    async saveGmailCredentials(userId, email, accessToken, refreshToken, expiresAt, workspaceId) {
+        let targetWorkspaceId = workspaceId;
+        if (!targetWorkspaceId) {
+            const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                include: {
+                    ownedWorkspaces: true,
+                    workspaceMemberships: {
+                        include: {
+                            workspace: true,
+                        },
                     },
                 },
-            },
-        });
-        if (!user) {
-            throw new Error('User not found');
-        }
-        const workspace = user.ownedWorkspaces[0] ||
-            user.workspaceMemberships[0]?.workspace ||
-            null;
-        if (!workspace) {
-            throw new Error('No workspace found for user');
+            });
+            if (!user) {
+                throw new Error('User not found');
+            }
+            const workspace = user.ownedWorkspaces[0] ||
+                user.workspaceMemberships[0]?.workspace ||
+                null;
+            if (!workspace) {
+                throw new Error('No workspace found for user');
+            }
+            targetWorkspaceId = workspace.id;
         }
         const existingCredential = await this.prisma.oAuthCredential.findFirst({
             where: {
-                workspaceId: workspace.id,
+                workspaceId: targetWorkspaceId,
                 providerType: 'GOOGLE_EMAIL',
             },
         });
@@ -108,7 +124,7 @@ let OAuthService = OAuthService_1 = class OAuthService {
             return this.prisma.oAuthCredential.create({
                 data: {
                     userId,
-                    workspaceId: workspace.id,
+                    workspaceId: targetWorkspaceId,
                     providerType: 'GOOGLE_EMAIL',
                     providerEmail: email,
                     accessToken,
@@ -303,6 +319,20 @@ let OAuthService = OAuthService_1 = class OAuthService {
     }
     async getCalendarCredentials(workspaceId) {
         return this.getGmailCredentials(workspaceId);
+    }
+    async getGmailConnectionStatus(workspaceId) {
+        const credential = await this.prisma.oAuthCredential.findFirst({
+            where: {
+                workspaceId,
+                providerType: 'GOOGLE_EMAIL',
+                isActive: true,
+            },
+        });
+        return {
+            connected: !!credential,
+            email: credential?.providerEmail || null,
+            lastUsedAt: credential?.lastUsedAt || null,
+        };
     }
 };
 exports.OAuthService = OAuthService;

@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import cookieParser from 'cookie-parser';
+import * as bodyParser from 'body-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,6 +14,10 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get('PORT');
   const frontendUrl = configService.get('FRONTEND_URL');
+
+  // Configure body parser with strict: false to handle unicode escapes
+  app.use(bodyParser.json({ strict: false }));
+  app.use(bodyParser.urlencoded({ extended: true }));
 
   // Cookie parser middleware
   app.use(cookieParser());

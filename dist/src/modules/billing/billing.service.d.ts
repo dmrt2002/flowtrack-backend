@@ -8,13 +8,13 @@ export declare class BillingService {
     private readonly stripeSecretKey;
     constructor(prisma: PrismaService, configService: ConfigService);
     getAvailablePlans(): Promise<{
-        name: string;
         id: string;
-        slug: string;
-        isActive: boolean;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         description: string | null;
+        slug: string;
+        isActive: boolean;
         currency: string;
         displayOrder: number;
         priceMonthllyCents: number | null;
@@ -26,13 +26,13 @@ export declare class BillingService {
     getWorkspaceSubscription(userId: string, workspaceId: string): Promise<{
         id: string;
         plan: {
-            name: string;
             id: string;
-            slug: string;
-            isActive: boolean;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             description: string | null;
+            slug: string;
+            isActive: boolean;
             currency: string;
             displayOrder: number;
             priceMonthllyCents: number | null;

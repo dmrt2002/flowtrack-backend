@@ -1,0 +1,130 @@
+import { PrismaService } from '../../../prisma/prisma.service';
+import { MessageDirection, Prisma } from '@prisma/client';
+import { EmailMessage } from '../types';
+export declare class MessageService {
+    private prisma;
+    private readonly logger;
+    constructor(prisma: PrismaService);
+    createOutboundMessage(workspaceId: string, leadId: string, message: EmailMessage): Promise<{
+        id: string;
+        workspaceId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        leadId: string;
+        direction: import("@prisma/client").$Enums.MessageDirection;
+        fromEmail: string;
+        fromName: string | null;
+        toEmail: string;
+        toName: string | null;
+        subject: string;
+        htmlBody: string | null;
+        textBody: string;
+        headers: Prisma.JsonValue | null;
+        inReplyTo: string | null;
+        messageId: string | null;
+        threadId: string | null;
+        sentAt: Date | null;
+        receivedAt: Date | null;
+    }>;
+    createInboundMessage(workspaceId: string, leadId: string, fromEmail: string, fromName: string | undefined, subject: string, textBody: string, htmlBody: string | undefined, messageId: string | undefined, inReplyTo: string | undefined, threadId: string | undefined, headers: Record<string, any> | undefined, receivedAt: Date): Promise<{
+        id: string;
+        workspaceId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        leadId: string;
+        direction: import("@prisma/client").$Enums.MessageDirection;
+        fromEmail: string;
+        fromName: string | null;
+        toEmail: string;
+        toName: string | null;
+        subject: string;
+        htmlBody: string | null;
+        textBody: string;
+        headers: Prisma.JsonValue | null;
+        inReplyTo: string | null;
+        messageId: string | null;
+        threadId: string | null;
+        sentAt: Date | null;
+        receivedAt: Date | null;
+    }>;
+    getMessagesByLead(leadId: string, workspaceId: string, direction?: MessageDirection, limit?: number, offset?: number): Promise<{
+        data: {
+            id: string;
+            createdAt: Date;
+            direction: import("@prisma/client").$Enums.MessageDirection;
+            fromEmail: string;
+            fromName: string | null;
+            toEmail: string;
+            toName: string | null;
+            subject: string;
+            htmlBody: string | null;
+            textBody: string;
+            inReplyTo: string | null;
+            messageId: string | null;
+            threadId: string | null;
+            sentAt: Date | null;
+            receivedAt: Date | null;
+        }[];
+        total: number;
+        limit: number;
+        offset: number;
+    }>;
+    getMessagesByWorkspace(workspaceId: string, direction?: MessageDirection, limit?: number, offset?: number): Promise<{
+        data: {
+            lead: {
+                id: string;
+                email: string;
+                name: string | null;
+            };
+            id: string;
+            createdAt: Date;
+            leadId: string;
+            direction: import("@prisma/client").$Enums.MessageDirection;
+            fromEmail: string;
+            fromName: string | null;
+            toEmail: string;
+            toName: string | null;
+            subject: string;
+            textBody: string;
+            sentAt: Date | null;
+            receivedAt: Date | null;
+        }[];
+        total: number;
+        limit: number;
+        offset: number;
+    }>;
+    findByMessageId(messageId: string): Promise<{
+        id: string;
+        workspaceId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        leadId: string;
+        direction: import("@prisma/client").$Enums.MessageDirection;
+        fromEmail: string;
+        fromName: string | null;
+        toEmail: string;
+        toName: string | null;
+        subject: string;
+        htmlBody: string | null;
+        textBody: string;
+        headers: Prisma.JsonValue | null;
+        inReplyTo: string | null;
+        messageId: string | null;
+        threadId: string | null;
+        sentAt: Date | null;
+        receivedAt: Date | null;
+    } | null>;
+    messageExists(messageId: string): Promise<boolean>;
+    getConversationsNeedingReply(workspaceId: string, limit?: number, offset?: number): Promise<{
+        data: any[];
+        total: number;
+        limit: number;
+        offset: number;
+    }>;
+    getConversationsSentOnly(workspaceId: string, limit?: number, offset?: number): Promise<{
+        data: any[];
+        total: number;
+        limit: number;
+        offset: number;
+    }>;
+}

@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { WorkflowEmailService } from '../../email/workflow-email.service';
+import { RelayEmailService } from '../../email-relay/services/relay-email.service';
 import { WorkflowQueueService } from './workflow-queue.service';
 import { ConditionEvaluatorService } from './condition-evaluator.service';
 import {
@@ -17,6 +18,7 @@ export class WorkflowExecutorService {
   constructor(
     private prisma: PrismaService,
     private emailService: WorkflowEmailService,
+    private relayEmailService: RelayEmailService,
     private queueService: WorkflowQueueService,
     private conditionEvaluator: ConditionEvaluatorService,
   ) {}
@@ -286,12 +288,24 @@ export class WorkflowExecutorService {
       variables,
     );
 
-    // Send email
-    await this.emailService.sendWorkflowEmail(execution.workspaceId, {
-      to: lead.email,
-      subject: emailSubject,
+    // Convert HTML to plain text for text body (basic conversion)
+    const textBody = htmlBody
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+
+    // Send email via Gmail Relay with Reply-To tracking
+    await this.relayEmailService.sendEmailToLead(
+      execution.workspaceId,
+      lead.id,
+      lead.email,
+      lead.name || undefined,
+      emailSubject,
+      textBody,
       htmlBody,
-    });
+      'FlowTrack',
+    );
 
     // Update lead with email sent timestamp and status
     await this.prisma.lead.update({
@@ -342,11 +356,24 @@ export class WorkflowExecutorService {
       variables,
     );
 
-    await this.emailService.sendWorkflowEmail(execution.workspaceId, {
-      to: lead.email,
-      subject: emailSubject,
+    // Convert HTML to plain text for text body (basic conversion)
+    const textBody = htmlBody
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+
+    // Send email via Gmail Relay with Reply-To tracking
+    await this.relayEmailService.sendEmailToLead(
+      execution.workspaceId,
+      lead.id,
+      lead.email,
+      lead.name || undefined,
+      emailSubject,
+      textBody,
       htmlBody,
-    });
+      'FlowTrack',
+    );
 
     await this.prisma.lead.update({
       where: { id: lead.id },

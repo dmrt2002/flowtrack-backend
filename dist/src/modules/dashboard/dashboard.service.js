@@ -231,18 +231,42 @@ let DashboardService = DashboardService_1 = class DashboardService {
     }
     async calculateAvgTimeToReply(workspaceId, startDate, endDate) {
         const result = await this.prisma.$queryRaw `
-      SELECT AVG(EXTRACT(EPOCH FROM (first_email_sent - created_at)) / 3600) as avg_hours
-      FROM (
-        SELECT l.id, l.created_at, MIN(e.created_at) as first_email_sent
-        FROM leads l
-        LEFT JOIN lead_events e ON l.id = e.lead_id AND e.event_type = 'email_sent'
-        WHERE l.workspace_id = ${workspaceId}::uuid
-          AND l.created_at >= ${startDate}::timestamp
-          AND l.created_at <= ${endDate}::timestamp
-          AND l.deleted_at IS NULL
-        GROUP BY l.id, l.created_at
-        HAVING MIN(e.created_at) IS NOT NULL
-      ) sub;
+      WITH inbound_messages AS (
+        SELECT 
+          m.id,
+          m.lead_id,
+          m.workspace_id,
+          COALESCE(m.received_at, m.created_at) as inbound_time,
+          m.thread_id
+        FROM messages m
+        WHERE m.workspace_id = ${workspaceId}::uuid
+          AND m.direction = 'INBOUND'
+          AND COALESCE(m.received_at, m.created_at) >= ${startDate}::timestamp
+          AND COALESCE(m.received_at, m.created_at) <= ${endDate}::timestamp
+      ),
+      reply_times AS (
+        SELECT 
+          im.id,
+          im.lead_id,
+          im.inbound_time,
+          MIN(COALESCE(om.sent_at, om.created_at)) as reply_time
+        FROM inbound_messages im
+        INNER JOIN messages om ON (
+          om.lead_id = im.lead_id
+          AND om.direction = 'OUTBOUND'
+          AND COALESCE(om.sent_at, om.created_at) > im.inbound_time
+          AND (
+            im.thread_id IS NULL 
+            OR om.thread_id = im.thread_id
+            OR om.in_reply_to IS NOT NULL
+          )
+        )
+        WHERE om.workspace_id = ${workspaceId}::uuid
+        GROUP BY im.id, im.lead_id, im.inbound_time
+        HAVING MIN(COALESCE(om.sent_at, om.created_at)) IS NOT NULL
+      )
+      SELECT AVG(EXTRACT(EPOCH FROM (reply_time - inbound_time)) / 3600) as avg_hours
+      FROM reply_times;
     `;
         return result[0]?.avg_hours || 0;
     }

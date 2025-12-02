@@ -19,6 +19,7 @@ import { LeadsModule } from './modules/leads/leads.module';
 import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { UserModule } from './modules/user/user.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { EmailRelayModule } from './modules/email-relay/email-relay.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -63,6 +64,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     WorkflowsModule,
     UserModule,
     BillingModule,
+    EmailRelayModule,
   ],
   controllers: [AppController],
   providers: [AppService],

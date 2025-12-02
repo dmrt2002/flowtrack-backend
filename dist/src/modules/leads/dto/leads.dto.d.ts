@@ -57,12 +57,12 @@ export declare const GetLeadsQuerySchema: z.ZodObject<{
     dateFrom: z.ZodOptional<z.ZodString>;
     dateTo: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
-        name: "name";
-        createdAt: "createdAt";
-        updatedAt: "updatedAt";
         email: "email";
+        name: "name";
         score: "score";
         lastActivityAt: "lastActivityAt";
+        createdAt: "createdAt";
+        updatedAt: "updatedAt";
     }>>>;
     sortOrder: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
         asc: "asc";

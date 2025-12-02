@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { EmailModule } from '../email/email.module';
+import { EmailRelayModule } from '../email-relay/email-relay.module';
 
 // Controllers
 import { WorkflowsController } from './workflows.controller';
@@ -20,6 +21,7 @@ import { WorkflowExecutionProcessor } from './processors/workflow-execution.proc
   imports: [
     PrismaModule,
     EmailModule,
+    EmailRelayModule,
     JwtModule.register({}),
     BullModule.registerQueue({
       name: 'workflow-execution',

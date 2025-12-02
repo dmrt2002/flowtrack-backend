@@ -5,13 +5,13 @@ export declare class BillingController {
     private readonly billingService;
     constructor(billingService: BillingService);
     getAvailablePlans(): Promise<{
-        name: string;
         id: string;
-        slug: string;
-        isActive: boolean;
+        name: string;
         createdAt: Date;
         updatedAt: Date;
         description: string | null;
+        slug: string;
+        isActive: boolean;
         currency: string;
         displayOrder: number;
         priceMonthllyCents: number | null;
@@ -23,13 +23,13 @@ export declare class BillingController {
     getWorkspaceSubscription(user: UserPayload, workspaceId: string): Promise<{
         id: string;
         plan: {
-            name: string;
             id: string;
-            slug: string;
-            isActive: boolean;
+            name: string;
             createdAt: Date;
             updatedAt: Date;
             description: string | null;
+            slug: string;
+            isActive: boolean;
             currency: string;
             displayOrder: number;
             priceMonthllyCents: number | null;

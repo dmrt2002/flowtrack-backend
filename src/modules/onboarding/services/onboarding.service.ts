@@ -1356,12 +1356,7 @@ export class OnboardingService {
       throw new BadRequestException('Invalid configuration ID');
     }
 
-    // Validate step progression - Step 5 (Simulation) should be complete
-    if (!session.completedSteps.includes(5)) {
-      throw new ForbiddenException(
-        'Please complete Step 5 (Simulation) first',
-      );
-    }
+    // Step 5 (Simulation) validation removed - animation is for visual purposes only
 
     // Find the workflow associated with this workspace (draft status)
     const workflow = await this.prisma.workflow.findFirst({

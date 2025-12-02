@@ -125,18 +125,18 @@ export declare class BookingHealthController {
             };
             recentBookings: ({
                 lead: {
-                    name: string | null;
                     email: string;
+                    name: string | null;
                 };
             } & {
                 id: string;
+                workflowId: string | null;
+                workspaceId: string;
                 createdAt: Date;
                 updatedAt: Date;
-                workspaceId: string;
-                responses: import("@prisma/client/runtime/library").JsonValue | null;
-                providerType: import("@prisma/client").$Enums.OAuthProviderType;
-                workflowId: string | null;
                 leadId: string;
+                providerType: import("@prisma/client").$Enums.OAuthProviderType;
+                responses: import("@prisma/client/runtime/library").JsonValue | null;
                 attributionMethod: import("@prisma/client").$Enums.BookingAttributionMethod | null;
                 utmContent: string | null;
                 hiddenFieldValue: string | null;

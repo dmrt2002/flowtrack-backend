@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { OAuthService } from '../oauth/oauth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EmailTrackingService } from './services/email-tracking.service';
+import { SentEmailService } from './services/sent-email.service';
 import { google } from 'googleapis';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
@@ -30,6 +31,7 @@ export class WorkflowEmailService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private emailTrackingService: EmailTrackingService,
+    private sentEmailService: SentEmailService,
   ) {
     this.initializeSystemTransporter();
   }
@@ -68,7 +70,7 @@ export class WorkflowEmailService {
   }
 
   /**
-   * Send workflow automation email
+   * Send workflow automation email and record in database
    * Automatically selects Gmail API or system SMTP based on workspace configuration
    */
   async sendWorkflowEmail(
@@ -91,12 +93,109 @@ export class WorkflowEmailService {
   }
 
   /**
+   * Send and record workflow email with full tracking
+   */
+  async sendAndRecordWorkflowEmail(params: {
+    workspaceId: string;
+    leadId: string;
+    workflowExecutionId: string;
+    workflowId: string;
+    emailData: SendWorkflowEmailDto;
+    emailType: 'welcome' | 'thank_you' | 'follow_up';
+    recipientName?: string;
+  }): Promise<{ emailId: string; messageId?: string }> {
+    const {
+      workspaceId,
+      leadId,
+      workflowExecutionId,
+      workflowId,
+      emailData,
+      emailType,
+      recipientName,
+    } = params;
+
+    const provider = await this.oauthService.getEmailProvider(workspaceId);
+
+    let gmailMessageId: string | undefined;
+    let gmailThreadId: string | undefined;
+    let smtpMessageId: string | undefined;
+    let senderEmail: string;
+    let senderName: string | undefined;
+    let providerType: 'GMAIL' | 'SMTP';
+
+    if (provider.type === 'GMAIL') {
+      this.logger.log(
+        `Sending email via Gmail API to: ${emailData.to} (Workspace: ${workspaceId})`,
+      );
+
+      const result = await this.sendViaGmailAPIWithMetadata(
+        provider.credentials,
+        emailData,
+      );
+
+      gmailMessageId = result.messageId;
+      gmailThreadId = result.threadId;
+      senderEmail = provider.credentials.providerEmail || 'noreply@flowtrack.app';
+      senderName = undefined; // Can extract from OAuth profile if needed
+      providerType = 'GMAIL';
+    } else {
+      this.logger.log(
+        `Sending email via System SMTP to: ${emailData.to} (Workspace: ${workspaceId})`,
+      );
+
+      const result = await this.sendViaSystemSMTPWithMetadata(emailData);
+
+      smtpMessageId = result.messageId;
+      senderEmail =
+        this.configService.get<string>('SMTP_FROM_EMAIL', 'noreply@flowtrack.app');
+      senderName = this.configService.get<string>('SMTP_FROM_NAME', 'FlowTrack');
+      providerType = 'SMTP';
+    }
+
+    // Record sent email in database
+    const sentEmail = await this.sentEmailService.recordSentEmail({
+      workspaceId,
+      leadId,
+      workflowExecutionId,
+      workflowId,
+      recipientEmail: emailData.to,
+      recipientName,
+      senderEmail,
+      senderName,
+      subject: emailData.subject,
+      htmlBody: emailData.htmlBody,
+      textBody: emailData.textBody,
+      emailType,
+      providerType,
+      gmailMessageId,
+      gmailThreadId,
+      smtpMessageId,
+      deliveryStatus: 'sent',
+    });
+
+    return {
+      emailId: sentEmail.id,
+      messageId: gmailMessageId || smtpMessageId,
+    };
+  }
+
+  /**
    * Send email using Gmail API with OAuth credentials
    */
   private async sendViaGmailAPI(
     credentials: any,
     emailData: SendWorkflowEmailDto,
   ): Promise<void> {
+    await this.sendViaGmailAPIWithMetadata(credentials, emailData);
+  }
+
+  /**
+   * Send email using Gmail API and return message metadata
+   */
+  private async sendViaGmailAPIWithMetadata(
+    credentials: any,
+    emailData: SendWorkflowEmailDto,
+  ): Promise<{ messageId: string; threadId: string }> {
     try {
       // Initialize OAuth2 client with credentials
       const oauth2Client = new google.auth.OAuth2(
@@ -116,6 +215,7 @@ export class WorkflowEmailService {
       const emailLines = [
         `To: ${emailData.to}`,
         `From: ${credentials.providerEmail}`,
+        `Cc: ${credentials.providerEmail}`,
         `Subject: ${emailData.subject}`,
         'MIME-Version: 1.0',
         'Content-Type: text/html; charset=utf-8',
@@ -124,7 +224,7 @@ export class WorkflowEmailService {
       ];
 
       if (emailData.replyTo) {
-        emailLines.splice(3, 0, `Reply-To: ${emailData.replyTo}`);
+        emailLines.splice(4, 0, `Reply-To: ${emailData.replyTo}`);
       }
 
       const message = emailLines.join('\n');
@@ -137,7 +237,7 @@ export class WorkflowEmailService {
         .replace(/=+$/, '');
 
       // Send via Gmail API
-      await gmail.users.messages.send({
+      const response = await gmail.users.messages.send({
         userId: 'me',
         requestBody: {
           raw: encodedMessage,
@@ -145,8 +245,13 @@ export class WorkflowEmailService {
       });
 
       this.logger.log(
-        `✅ Email sent successfully via Gmail API to: ${emailData.to}`,
+        `✅ Email sent successfully via Gmail API to: ${emailData.to} (Message ID: ${response.data.id})`,
       );
+
+      return {
+        messageId: response.data.id || '',
+        threadId: response.data.threadId || '',
+      };
     } catch (error) {
       this.logger.error(
         `❌ Failed to send email via Gmail API: ${error.message}`,
@@ -161,6 +266,15 @@ export class WorkflowEmailService {
   private async sendViaSystemSMTP(
     emailData: SendWorkflowEmailDto,
   ): Promise<void> {
+    await this.sendViaSystemSMTPWithMetadata(emailData);
+  }
+
+  /**
+   * Send email using system SMTP and return message metadata
+   */
+  private async sendViaSystemSMTPWithMetadata(
+    emailData: SendWorkflowEmailDto,
+  ): Promise<{ messageId: string }> {
     if (!this.systemTransporter) {
       this.logger.error(
         'System email transporter not initialized. Cannot send email.',
@@ -172,15 +286,12 @@ export class WorkflowEmailService {
       'SMTP_FROM_EMAIL',
       'noreply@flowtrack.app',
     );
-    const fromName = this.configService.get<string>(
-      'SMTP_FROM_NAME',
-      'FlowTrack',
-    );
 
     try {
-      await this.systemTransporter.sendMail({
-        from: `"${fromName}" <${fromEmail}>`,
+      const info = await this.systemTransporter.sendMail({
+        from: fromEmail,
         to: emailData.to,
+        cc: fromEmail,
         subject: emailData.subject,
         html: emailData.htmlBody,
         text: emailData.textBody,
@@ -188,8 +299,12 @@ export class WorkflowEmailService {
       });
 
       this.logger.log(
-        `✅ Email sent successfully via System SMTP to: ${emailData.to}`,
+        `✅ Email sent successfully via System SMTP to: ${emailData.to} (Message ID: ${info.messageId})`,
       );
+
+      return {
+        messageId: info.messageId || '',
+      };
     } catch (error) {
       this.logger.error(
         `❌ Failed to send email via System SMTP: ${error.message}`,

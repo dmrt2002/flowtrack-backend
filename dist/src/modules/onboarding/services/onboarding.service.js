@@ -961,9 +961,6 @@ let OnboardingService = OnboardingService_1 = class OnboardingService {
         if (!session || session.userId !== userId) {
             throw new common_1.BadRequestException('Invalid configuration ID');
         }
-        if (!session.completedSteps.includes(5)) {
-            throw new common_1.ForbiddenException('Please complete Step 5 (Simulation) first');
-        }
         const workflow = await this.prisma.workflow.findFirst({
             where: {
                 workspaceId: session.workspaceId,

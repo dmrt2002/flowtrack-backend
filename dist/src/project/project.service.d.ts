@@ -12,36 +12,36 @@ export declare class ProjectService {
         _count: {
             tasks: number;
         };
-        name: string;
         id: string;
+        workspaceId: string;
+        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        workspaceId: string;
         description: string | null;
     }[]>;
     createProject(userId: string, dto: CreateProjectDto): Promise<{
-        name: string;
         id: string;
+        workspaceId: string;
+        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        workspaceId: string;
         description: string | null;
     }>;
     getProjectById(userId: string, projectId: string): Promise<{
         workspace: {
-            name: string;
             id: string;
+            name: string;
+            deletedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
+            settings: import("@prisma/client/runtime/library").JsonValue;
             slug: string;
             intakeEmailId: string;
             ownerUserId: string;
             timezone: string;
-            settings: import("@prisma/client/runtime/library").JsonValue;
             isActive: boolean;
-            deletedAt: Date | null;
-            createdAt: Date;
-            updatedAt: Date;
         };
         tasks: {
             id: string;
@@ -54,21 +54,21 @@ export declare class ProjectService {
             projectId: string;
         }[];
     } & {
-        name: string;
         id: string;
+        workspaceId: string;
+        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        workspaceId: string;
         description: string | null;
     }>;
     updateProject(userId: string, projectId: string, dto: UpdateProjectDto): Promise<{
-        name: string;
         id: string;
+        workspaceId: string;
+        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        workspaceId: string;
         description: string | null;
     }>;
     deleteProject(userId: string, projectId: string): Promise<{

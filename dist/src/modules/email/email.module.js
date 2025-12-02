@@ -12,7 +12,9 @@ const config_1 = require("@nestjs/config");
 const jwt_1 = require("@nestjs/jwt");
 const workflow_email_service_1 = require("./workflow-email.service");
 const email_tracking_service_1 = require("./services/email-tracking.service");
+const sent_email_service_1 = require("./services/sent-email.service");
 const email_tracking_controller_1 = require("./controllers/email-tracking.controller");
+const sent_email_controller_1 = require("./controllers/sent-email.controller");
 const oauth_module_1 = require("../oauth/oauth.module");
 const prisma_module_1 = require("../../prisma/prisma.module");
 let EmailModule = class EmailModule {
@@ -26,9 +28,9 @@ exports.EmailModule = EmailModule = __decorate([
             prisma_module_1.PrismaModule,
             jwt_1.JwtModule.register({}),
         ],
-        controllers: [email_tracking_controller_1.EmailTrackingController],
-        providers: [workflow_email_service_1.WorkflowEmailService, email_tracking_service_1.EmailTrackingService],
-        exports: [workflow_email_service_1.WorkflowEmailService, email_tracking_service_1.EmailTrackingService],
+        controllers: [email_tracking_controller_1.EmailTrackingController, sent_email_controller_1.SentEmailController],
+        providers: [workflow_email_service_1.WorkflowEmailService, email_tracking_service_1.EmailTrackingService, sent_email_service_1.SentEmailService],
+        exports: [workflow_email_service_1.WorkflowEmailService, email_tracking_service_1.EmailTrackingService, sent_email_service_1.SentEmailService],
     })
 ], EmailModule);
 //# sourceMappingURL=email.module.js.map

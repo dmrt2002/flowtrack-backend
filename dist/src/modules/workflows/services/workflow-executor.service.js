@@ -14,18 +14,21 @@ exports.WorkflowExecutorService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../prisma/prisma.service");
 const workflow_email_service_1 = require("../../email/workflow-email.service");
+const relay_email_service_1 = require("../../email-relay/services/relay-email.service");
 const workflow_queue_service_1 = require("./workflow-queue.service");
 const condition_evaluator_service_1 = require("./condition-evaluator.service");
 const client_1 = require("@prisma/client");
 let WorkflowExecutorService = WorkflowExecutorService_1 = class WorkflowExecutorService {
     prisma;
     emailService;
+    relayEmailService;
     queueService;
     conditionEvaluator;
     logger = new common_1.Logger(WorkflowExecutorService_1.name);
-    constructor(prisma, emailService, queueService, conditionEvaluator) {
+    constructor(prisma, emailService, relayEmailService, queueService, conditionEvaluator) {
         this.prisma = prisma;
         this.emailService = emailService;
+        this.relayEmailService = relayEmailService;
         this.queueService = queueService;
         this.conditionEvaluator = conditionEvaluator;
     }
@@ -170,11 +173,12 @@ let WorkflowExecutorService = WorkflowExecutorService_1 = class WorkflowExecutor
             email: lead.email,
         };
         const htmlBody = await this.emailService.buildEmailFromTemplate(execution.workspaceId, execution.workflowId, lead.id, emailTemplate, variables);
-        await this.emailService.sendWorkflowEmail(execution.workspaceId, {
-            to: lead.email,
-            subject: emailSubject,
-            htmlBody,
-        });
+        const textBody = htmlBody
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<[^>]+>/g, '')
+            .trim();
+        await this.relayEmailService.sendEmailToLead(execution.workspaceId, lead.id, lead.email, lead.name || undefined, emailSubject, textBody, htmlBody, 'FlowTrack');
         await this.prisma.lead.update({
             where: { id: lead.id },
             data: {
@@ -200,11 +204,12 @@ let WorkflowExecutorService = WorkflowExecutorService_1 = class WorkflowExecutor
             email: lead.email,
         };
         const htmlBody = await this.emailService.buildEmailFromTemplate(execution.workspaceId, execution.workflowId, lead.id, followUpTemplate, variables);
-        await this.emailService.sendWorkflowEmail(execution.workspaceId, {
-            to: lead.email,
-            subject: emailSubject,
-            htmlBody,
-        });
+        const textBody = htmlBody
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<[^>]+>/g, '')
+            .trim();
+        await this.relayEmailService.sendEmailToLead(execution.workspaceId, lead.id, lead.email, lead.name || undefined, emailSubject, textBody, htmlBody, 'FlowTrack');
         await this.prisma.lead.update({
             where: { id: lead.id },
             data: {
@@ -357,6 +362,7 @@ exports.WorkflowExecutorService = WorkflowExecutorService = WorkflowExecutorServ
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         workflow_email_service_1.WorkflowEmailService,
+        relay_email_service_1.RelayEmailService,
         workflow_queue_service_1.WorkflowQueueService,
         condition_evaluator_service_1.ConditionEvaluatorService])
 ], WorkflowExecutorService);

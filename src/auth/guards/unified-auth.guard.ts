@@ -107,9 +107,37 @@ export class UnifiedAuthGuard implements CanActivate {
 
       // Attach user to request with transformed workspace data
       const { workspaceMemberships, ...userData } = user;
+      const workspaces = workspaceMemberships.map((m: any) => m.workspace);
+
+      // Get public form URL from active workflow for the first workspace
+      let publicFormUrl: string | null = null;
+      if (workspaces.length > 0) {
+        const firstWorkspace = workspaces[0];
+        const activeWorkflow = await this.prisma.workflow.findFirst({
+          where: {
+            workspaceId: firstWorkspace.id,
+            status: 'active',
+            deletedAt: null,
+          },
+          select: {
+            workspace: {
+              select: {
+                slug: true,
+              },
+            },
+          },
+        });
+
+        if (activeWorkflow) {
+          const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+          publicFormUrl = `${frontendUrl}/p/${activeWorkflow.workspace.slug}`;
+        }
+      }
+
       request.user = {
         ...userData,
-        workspaces: workspaceMemberships.map((m: any) => m.workspace),
+        workspaces,
+        publicFormUrl,
       };
       this.logger.debug(`✅ Authentication successful for: ${user.email}`);
       return true;

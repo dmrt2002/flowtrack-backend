@@ -5,9 +5,9 @@ export declare class UserController {
     constructor(userService: UserService);
     getProfile(req: any): Promise<{
         id: string;
+        email: string;
         createdAt: Date;
         updatedAt: Date;
-        email: string;
         firstName: string | null;
         lastName: string | null;
         avatarUrl: string | null;
@@ -17,9 +17,9 @@ export declare class UserController {
     }>;
     updateProfile(req: any, dto: UpdateProfileDto): Promise<{
         id: string;
+        email: string;
         createdAt: Date;
         updatedAt: Date;
-        email: string;
         firstName: string | null;
         lastName: string | null;
         avatarUrl: string | null;
@@ -33,8 +33,8 @@ export declare class UserController {
     }>;
     getConnectedAccounts(req: any): Promise<{
         id: string;
-        isActive: boolean;
         createdAt: Date;
+        isActive: boolean;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerEmail: string | null;
     }[]>;

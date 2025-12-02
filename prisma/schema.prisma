@@ -4,7 +4,7 @@
 // Generated: 2025-01-22
 // Database: PostgreSQL
 // ORM: Prisma
-// Total Models: 25
+// Total Models: 26
 // =============================================================================
 
 generator client {
@@ -211,6 +211,13 @@ enum AuthProvider {
   @@map("auth_provider")
 }
 
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+
+  @@map("message_direction")
+}
+
 // =============================================================================
 // MODULE 1: IDENTITY & ACCESS MANAGEMENT
 // =============================================================================
@@ -285,6 +292,8 @@ model Workspace {
   subscriptions       Subscription[]
   onboardingSessions  OnboardingSession[]
   bookings            Booking[]
+  sentEmails          SentEmail[]
+  messages            Message[]
 
   @@index([ownerUserId], map: "idx_workspaces_owner") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
   @@index([slug], map: "idx_workspaces_slug") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
@@ -448,6 +457,7 @@ model Workflow {
   workflowExecutions WorkflowExecution[]
   bookings           Booking[]
   dailyStats         WorkflowDailyStat[]
+  sentEmails         SentEmail[]
 
   @@index([workspaceId, status], map: "idx_workflows_workspace") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
   @@index([status], map: "idx_workflows_status") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
@@ -575,6 +585,8 @@ model Lead {
   events             LeadEvent[]
   workflowExecutions WorkflowExecution[]
   bookings           Booking[]
+  sentEmails         SentEmail[]
+  messages           Message[]
 
   @@unique([workflowId, email], map: "leads_unique_email_per_workflow")
   @@index([workflowId, status], map: "idx_leads_workflow") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
@@ -673,6 +685,92 @@ model BookingPollingJob {
   @@index([oauthCredentialId], map: "idx_polling_jobs_credential")
   @@index([status, startedAt(sort: Desc)], map: "idx_polling_jobs_status")
   @@map("booking_polling_jobs")
+}
+
+/// Store all automated emails sent through workflows
+model SentEmail {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId          String    @map("workspace_id") @db.Uuid
+  leadId               String    @map("lead_id") @db.Uuid
+  workflowExecutionId  String    @map("workflow_execution_id") @db.Uuid
+  workflowId           String    @map("workflow_id") @db.Uuid
+  // Email content
+  recipientEmail       String    @map("recipient_email") @db.Citext
+  recipientName        String?   @map("recipient_name") @db.VarChar(200)
+  senderEmail          String    @map("sender_email") @db.Citext
+  senderName           String?   @map("sender_name") @db.VarChar(200)
+  subject              String    @db.VarChar(500)
+  htmlBody             String    @map("html_body") @db.Text
+  textBody             String?   @map("text_body") @db.Text
+  // Email metadata
+  emailType            String    @map("email_type") @db.VarChar(20) // 'welcome' | 'thank_you' | 'follow_up'
+  providerType         String    @map("provider_type") @db.VarChar(20) // 'GMAIL' | 'SMTP'
+  gmailMessageId       String?   @map("gmail_message_id") @db.VarChar(255)
+  gmailThreadId        String?   @map("gmail_thread_id") @db.VarChar(255)
+  smtpMessageId        String?   @map("smtp_message_id") @db.VarChar(255)
+  // Delivery tracking
+  deliveryStatus       String    @default("sent") @map("delivery_status") @db.VarChar(20) // 'sent' | 'delivered' | 'bounced' | 'failed'
+  deliveryError        String?   @map("delivery_error") @db.Text
+  // Open tracking
+  openCount            Int       @default(0) @map("open_count")
+  firstOpenedAt        DateTime? @map("first_opened_at") @db.Timestamp()
+  lastOpenedAt         DateTime? @map("last_opened_at") @db.Timestamp()
+  // Timestamps
+  sentAt               DateTime  @default(now()) @map("sent_at") @db.Timestamp()
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace          Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead               Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  workflowExecution  WorkflowExecution @relation(fields: [workflowExecutionId], references: [id], onDelete: Cascade)
+  workflow           Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, sentAt(sort: Desc)], map: "idx_sent_emails_workspace")
+  @@index([leadId, sentAt(sort: Desc)], map: "idx_sent_emails_lead")
+  @@index([workflowExecutionId], map: "idx_sent_emails_execution")
+  @@index([emailType], map: "idx_sent_emails_type")
+  @@index([deliveryStatus], map: "idx_sent_emails_delivery_status")
+  @@index([openCount], map: "idx_sent_emails_open_count")
+  @@index([gmailMessageId], map: "idx_sent_emails_gmail_message") // TODO: Add partial index WHERE gmail_message_id IS NOT NULL in migration
+  @@map("sent_emails")
+}
+
+/// Store inbound and outbound email messages for Gmail Relay system
+model Message {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String           @map("workspace_id") @db.Uuid
+  leadId      String           @map("lead_id") @db.Uuid
+  direction   MessageDirection
+  // Email headers
+  fromEmail   String           @map("from_email") @db.Citext
+  fromName    String?          @map("from_name") @db.VarChar(200)
+  toEmail     String           @map("to_email") @db.Citext
+  toName      String?          @map("to_name") @db.VarChar(200)
+  subject     String           @db.VarChar(500)
+  // Email body
+  htmlBody    String?          @map("html_body") @db.Text
+  textBody    String           @map("text_body") @db.Text
+  // Email metadata
+  headers     Json?            @db.JsonB
+  inReplyTo   String?          @map("in_reply_to") @db.VarChar(255)
+  messageId   String?          @unique @map("message_id") @db.VarChar(255)
+  threadId    String?          @map("thread_id") @db.VarChar(255)
+  // Timestamps
+  sentAt      DateTime?        @map("sent_at") @db.Timestamp()
+  receivedAt  DateTime?        @map("received_at") @db.Timestamp()
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, createdAt(sort: Desc)], map: "idx_messages_lead")
+  @@index([workspaceId, direction], map: "idx_messages_workspace")
+  @@index([threadId], map: "idx_messages_thread")
+  @@index([messageId], map: "idx_messages_message_id")
+  @@map("messages")
 }
 
 /// Track webhook idempotency to prevent duplicates
@@ -782,6 +880,7 @@ model WorkflowExecution {
   triggerNode    WorkflowNode?   @relation(fields: [triggerNodeId], references: [id], onDelete: SetNull)
   executionSteps ExecutionStep[]
   executionLogs  ExecutionLog[]
+  sentEmails     SentEmail[]
 
   @@unique([workflowId, idempotencyKey], map: "workflow_executions_unique_idempotency")
   @@index([workflowId, status, createdAt(sort: Desc)], map: "idx_workflow_executions_workflow")

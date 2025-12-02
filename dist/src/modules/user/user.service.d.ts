@@ -7,9 +7,9 @@ export declare class UserService {
     constructor(prisma: PrismaService, passwordService: PasswordService);
     getUserProfile(userId: string): Promise<{
         id: string;
+        email: string;
         createdAt: Date;
         updatedAt: Date;
-        email: string;
         firstName: string | null;
         lastName: string | null;
         avatarUrl: string | null;
@@ -19,9 +19,9 @@ export declare class UserService {
     }>;
     updateProfile(userId: string, dto: UpdateProfileDto): Promise<{
         id: string;
+        email: string;
         createdAt: Date;
         updatedAt: Date;
-        email: string;
         firstName: string | null;
         lastName: string | null;
         avatarUrl: string | null;
@@ -35,8 +35,8 @@ export declare class UserService {
     }>;
     getConnectedAccounts(userId: string): Promise<{
         id: string;
-        isActive: boolean;
         createdAt: Date;
+        isActive: boolean;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerEmail: string | null;
     }[]>;
