@@ -31,6 +31,8 @@ const billing_module_1 = require("./modules/billing/billing.module");
 const email_relay_module_1 = require("./modules/email-relay/email-relay.module");
 const meeting_recorder_module_1 = require("./modules/meeting-recorder/meeting-recorder.module");
 const enrichment_module_1 = require("./modules/enrichment/enrichment.module");
+const onboarding_scraper_module_1 = require("./modules/onboarding-scraper/onboarding-scraper.module");
+const sales_pitch_module_1 = require("./modules/sales-pitch/sales-pitch.module");
 const schedule_1 = require("@nestjs/schedule");
 let AppModule = class AppModule {
 };
@@ -72,6 +74,8 @@ exports.AppModule = AppModule = __decorate([
             email_relay_module_1.EmailRelayModule,
             meeting_recorder_module_1.MeetingRecorderModule,
             enrichment_module_1.EnrichmentModule,
+            onboarding_scraper_module_1.OnboardingScraperModule,
+            sales_pitch_module_1.SalesPitchModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

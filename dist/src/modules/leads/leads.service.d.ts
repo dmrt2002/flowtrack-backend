@@ -37,6 +37,7 @@ export declare class LeadsService {
                 enrichmentData: Prisma.JsonValue | null;
                 enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
                 enrichedAt: Date | null;
+                salesPitchData: Prisma.JsonValue | null;
                 lastActivityAt: Date | null;
                 lastEmailSentAt: Date | null;
                 lastEmailOpenedAt: Date | null;
@@ -75,6 +76,7 @@ export declare class LeadsService {
             enrichmentData: Prisma.JsonValue | null;
             enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
             enrichedAt: Date | null;
+            salesPitchData: Prisma.JsonValue | null;
             lastActivityAt: Date | null;
             lastEmailSentAt: Date | null;
             lastEmailOpenedAt: Date | null;
@@ -171,6 +173,7 @@ export declare class LeadsService {
         enrichmentData: Prisma.JsonValue | null;
         enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
         enrichedAt: Date | null;
+        salesPitchData: Prisma.JsonValue | null;
         lastActivityAt: Date | null;
         lastEmailSentAt: Date | null;
         lastEmailOpenedAt: Date | null;
@@ -230,6 +233,7 @@ export declare class LeadsService {
         enrichmentData: Prisma.JsonValue | null;
         enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
         enrichedAt: Date | null;
+        salesPitchData: Prisma.JsonValue | null;
         lastActivityAt: Date | null;
         lastEmailSentAt: Date | null;
         lastEmailOpenedAt: Date | null;
@@ -271,6 +275,7 @@ export declare class LeadsService {
         enrichmentData: Prisma.JsonValue | null;
         enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
         enrichedAt: Date | null;
+        salesPitchData: Prisma.JsonValue | null;
         lastActivityAt: Date | null;
         lastEmailSentAt: Date | null;
         lastEmailOpenedAt: Date | null;

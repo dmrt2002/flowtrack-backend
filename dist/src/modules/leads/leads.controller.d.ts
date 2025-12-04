@@ -40,6 +40,7 @@ export declare class LeadsController {
                 enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
                 enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
                 enrichedAt: Date | null;
+                salesPitchData: import("@prisma/client/runtime/library").JsonValue | null;
                 lastActivityAt: Date | null;
                 lastEmailSentAt: Date | null;
                 lastEmailOpenedAt: Date | null;
@@ -78,6 +79,7 @@ export declare class LeadsController {
             enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
             enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
             enrichedAt: Date | null;
+            salesPitchData: import("@prisma/client/runtime/library").JsonValue | null;
             lastActivityAt: Date | null;
             lastEmailSentAt: Date | null;
             lastEmailOpenedAt: Date | null;
@@ -183,6 +185,7 @@ export declare class LeadsController {
         enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
         enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
         enrichedAt: Date | null;
+        salesPitchData: import("@prisma/client/runtime/library").JsonValue | null;
         lastActivityAt: Date | null;
         lastEmailSentAt: Date | null;
         lastEmailOpenedAt: Date | null;
@@ -232,6 +235,7 @@ export declare class LeadsController {
         enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
         enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
         enrichedAt: Date | null;
+        salesPitchData: import("@prisma/client/runtime/library").JsonValue | null;
         lastActivityAt: Date | null;
         lastEmailSentAt: Date | null;
         lastEmailOpenedAt: Date | null;
@@ -266,6 +270,7 @@ export declare class LeadsController {
         enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
         enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
         enrichedAt: Date | null;
+        salesPitchData: import("@prisma/client/runtime/library").JsonValue | null;
         lastActivityAt: Date | null;
         lastEmailSentAt: Date | null;
         lastEmailOpenedAt: Date | null;

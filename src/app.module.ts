@@ -22,6 +22,8 @@ import { BillingModule } from './modules/billing/billing.module';
 import { EmailRelayModule } from './modules/email-relay/email-relay.module';
 import { MeetingRecorderModule } from './modules/meeting-recorder/meeting-recorder.module';
 import { EnrichmentModule } from './modules/enrichment/enrichment.module';
+import { OnboardingScraperModule } from './modules/onboarding-scraper/onboarding-scraper.module';
+import { SalesPitchModule } from './modules/sales-pitch/sales-pitch.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -69,6 +71,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     EmailRelayModule,
     MeetingRecorderModule,
     EnrichmentModule,
+    OnboardingScraperModule,
+    SalesPitchModule,
   ],
   controllers: [AppController],
   providers: [AppService],

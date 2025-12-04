@@ -595,6 +595,7 @@ model Lead {
   enrichmentData    Json?      @map("enrichment_data") @db.JsonB
   enrichmentStatus  EnrichmentStatus? @default(PENDING) @map("enrichment_status")
   enrichedAt        DateTime?  @map("enriched_at") @db.Timestamp()
+  salesPitchData    Json?      @map("sales_pitch_data") @db.JsonB
   lastActivityAt    DateTime?  @map("last_activity_at") @db.Timestamp()
   lastEmailSentAt   DateTime?  @map("last_email_sent_at") @db.Timestamp()
   lastEmailOpenedAt DateTime?  @map("last_email_opened_at") @db.Timestamp()
