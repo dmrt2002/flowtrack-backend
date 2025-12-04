@@ -6,12 +6,12 @@ export declare class BillingController {
     constructor(billingService: BillingService);
     getAvailablePlans(): Promise<{
         id: string;
-        name: string;
+        isActive: boolean;
         createdAt: Date;
         updatedAt: Date;
-        description: string | null;
+        name: string;
         slug: string;
-        isActive: boolean;
+        description: string | null;
         currency: string;
         displayOrder: number;
         priceMonthllyCents: number | null;
@@ -24,12 +24,12 @@ export declare class BillingController {
         id: string;
         plan: {
             id: string;
-            name: string;
+            isActive: boolean;
             createdAt: Date;
             updatedAt: Date;
-            description: string | null;
+            name: string;
             slug: string;
-            isActive: boolean;
+            description: string | null;
             currency: string;
             displayOrder: number;
             priceMonthllyCents: number | null;

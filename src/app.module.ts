@@ -20,6 +20,8 @@ import { WorkflowsModule } from './modules/workflows/workflows.module';
 import { UserModule } from './modules/user/user.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { EmailRelayModule } from './modules/email-relay/email-relay.module';
+import { MeetingRecorderModule } from './modules/meeting-recorder/meeting-recorder.module';
+import { EnrichmentModule } from './modules/enrichment/enrichment.module';
 import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
@@ -65,6 +67,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     UserModule,
     BillingModule,
     EmailRelayModule,
+    MeetingRecorderModule,
+    EnrichmentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

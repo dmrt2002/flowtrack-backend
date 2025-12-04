@@ -12,29 +12,29 @@ export declare class WorkspaceController {
         role: import("@prisma/client").$Enums.WorkspaceMemberRole;
         membershipId: string;
         id: string;
-        name: string;
+        isActive: boolean;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        settings: import("@prisma/client/runtime/library").JsonValue;
+        name: string;
         slug: string;
         intakeEmailId: string;
         ownerUserId: string;
         timezone: string;
-        isActive: boolean;
+        settings: import("@prisma/client/runtime/library").JsonValue;
     }[]>;
     createWorkspace(user: UserPayload, createWorkspaceDto: CreateWorkspaceDto): Promise<{
         id: string;
-        name: string;
+        isActive: boolean;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        settings: import("@prisma/client/runtime/library").JsonValue;
+        name: string;
         slug: string;
         intakeEmailId: string;
         ownerUserId: string;
         timezone: string;
-        isActive: boolean;
+        settings: import("@prisma/client/runtime/library").JsonValue;
     }>;
     getWorkspaceById(user: UserPayload, id: string): Promise<{
         role: import("@prisma/client").$Enums.WorkspaceMemberRole;
@@ -47,37 +47,37 @@ export declare class WorkspaceController {
             };
         } & {
             id: string;
+            userId: string;
             workspaceId: string;
+            isActive: boolean;
             deletedAt: Date | null;
             createdAt: Date;
             updatedAt: Date;
             role: import("@prisma/client").$Enums.WorkspaceMemberRole;
-            isActive: boolean;
-            userId: string;
             permissions: import("@prisma/client/runtime/library").JsonValue;
             invitedByUserId: string | null;
             invitedAt: Date | null;
             joinedAt: Date | null;
         })[];
         id: string;
-        name: string;
+        isActive: boolean;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        settings: import("@prisma/client/runtime/library").JsonValue;
+        name: string;
         slug: string;
         intakeEmailId: string;
         ownerUserId: string;
         timezone: string;
-        isActive: boolean;
+        settings: import("@prisma/client/runtime/library").JsonValue;
     }>;
     getWorkspaceMembers(user: UserPayload, id: string): Promise<{
         id: string;
         role: import("@prisma/client").$Enums.WorkspaceMemberRole;
         user: {
             id: string;
-            email: string;
             createdAt: Date;
+            email: string;
             firstName: string | null;
             lastName: string | null;
         };
@@ -112,16 +112,16 @@ export declare class WorkspaceController {
     }>;
     updateWorkspace(user: UserPayload, workspaceId: string, dto: UpdateWorkspaceDto): Promise<{
         id: string;
-        name: string;
+        isActive: boolean;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        settings: import("@prisma/client/runtime/library").JsonValue;
+        name: string;
         slug: string;
         intakeEmailId: string;
         ownerUserId: string;
         timezone: string;
-        isActive: boolean;
+        settings: import("@prisma/client/runtime/library").JsonValue;
     }>;
     deleteWorkspace(user: UserPayload, workspaceId: string): Promise<{
         success: boolean;

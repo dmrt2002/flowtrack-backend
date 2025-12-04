@@ -10,9 +10,9 @@ export declare class WorkflowTriggerService {
     getExecutionStatus(executionId: string): Promise<({
         executionSteps: {
             id: string;
-            status: import("@prisma/client").$Enums.ExecutionStepStatus;
             createdAt: Date;
             updatedAt: Date;
+            status: import("@prisma/client").$Enums.ExecutionStepStatus;
             completedAt: Date | null;
             errorMessage: string | null;
             retryCount: number;
@@ -39,15 +39,15 @@ export declare class WorkflowTriggerService {
         }[];
     } & {
         id: string;
-        workflowId: string;
         workspaceId: string;
-        status: import("@prisma/client").$Enums.WorkflowExecutionStatus;
         createdAt: Date;
         updatedAt: Date;
-        leadId: string | null;
+        status: import("@prisma/client").$Enums.WorkflowExecutionStatus;
         completedAt: Date | null;
+        workflowId: string;
         errorMessage: string | null;
         retryCount: number;
+        leadId: string | null;
         startedAt: Date | null;
         errorDetails: import("@prisma/client/runtime/library").JsonValue | null;
         durationMs: number | null;

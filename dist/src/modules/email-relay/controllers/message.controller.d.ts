@@ -10,22 +10,22 @@ export declare class MessageController {
     constructor(messageService: MessageService, relayEmailService: RelayEmailService, prisma: PrismaService);
     getWorkspaceMessages(workspaceId: string, query: GetMessagesQueryDto): Promise<{
         data: {
-            lead: {
-                id: string;
-                email: string;
-                name: string | null;
-            };
             id: string;
             createdAt: Date;
+            lead: {
+                id: string;
+                name: string | null;
+                email: string;
+            };
+            subject: string;
             leadId: string;
+            sentAt: Date | null;
+            textBody: string;
             direction: import("@prisma/client").$Enums.MessageDirection;
             fromEmail: string;
             fromName: string | null;
             toEmail: string;
             toName: string | null;
-            subject: string;
-            textBody: string;
-            sentAt: Date | null;
             receivedAt: Date | null;
         }[];
         total: number;
@@ -36,18 +36,18 @@ export declare class MessageController {
         data: {
             id: string;
             createdAt: Date;
+            inReplyTo: string | null;
+            subject: string;
+            messageId: string | null;
+            sentAt: Date | null;
+            htmlBody: string | null;
+            textBody: string;
+            threadId: string | null;
             direction: import("@prisma/client").$Enums.MessageDirection;
             fromEmail: string;
             fromName: string | null;
             toEmail: string;
             toName: string | null;
-            subject: string;
-            htmlBody: string | null;
-            textBody: string;
-            inReplyTo: string | null;
-            messageId: string | null;
-            threadId: string | null;
-            sentAt: Date | null;
             receivedAt: Date | null;
         }[];
         total: number;

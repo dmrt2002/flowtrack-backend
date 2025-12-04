@@ -4,10 +4,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LeadsController } from './leads.controller';
 import { LeadsService } from './leads.service';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { EnrichmentModule } from '../enrichment/enrichment.module';
 
 @Module({
   imports: [
     PrismaModule,
+    EnrichmentModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

@@ -13,6 +13,7 @@ const config_1 = require("@nestjs/config");
 const leads_controller_1 = require("./leads.controller");
 const leads_service_1 = require("./leads.service");
 const prisma_module_1 = require("../../prisma/prisma.module");
+const enrichment_module_1 = require("../enrichment/enrichment.module");
 let LeadsModule = class LeadsModule {
 };
 exports.LeadsModule = LeadsModule;
@@ -20,6 +21,7 @@ exports.LeadsModule = LeadsModule = __decorate([
     (0, common_1.Module)({
         imports: [
             prisma_module_1.PrismaModule,
+            enrichment_module_1.EnrichmentModule,
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
                 inject: [config_1.ConfigService],

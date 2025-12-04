@@ -129,6 +129,16 @@ enum LeadStatus {
   @@map("lead_status")
 }
 
+enum EnrichmentStatus {
+  PENDING // Enrichment queued but not started
+  PROCESSING // Currently enriching
+  COMPLETED // Enrichment successful
+  FAILED // Enrichment failed
+  SKIPPED // Enrichment skipped (no domain/invalid email)
+
+  @@map("enrichment_status")
+}
+
 enum LeadEventCategory {
   activity
   system
@@ -218,6 +228,15 @@ enum MessageDirection {
   @@map("message_direction")
 }
 
+enum EmailTrackingClassification {
+  BOT_PREFETCH
+  GENUINE_OPEN
+  AMBIGUOUS
+  DIRECT_OPEN
+
+  @@map("email_tracking_classification")
+}
+
 // =============================================================================
 // MODULE 1: IDENTITY & ACCESS MANAGEMENT
 // =============================================================================
@@ -293,7 +312,9 @@ model Workspace {
   onboardingSessions  OnboardingSession[]
   bookings            Booking[]
   sentEmails          SentEmail[]
+  emailTrackingEvents EmailTrackingEvent[]
   messages            Message[]
+  meetingRecordings   MeetingRecording[]
 
   @@index([ownerUserId], map: "idx_workspaces_owner") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
   @@index([slug], map: "idx_workspaces_slug") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
@@ -571,6 +592,9 @@ model Lead {
   tags              String[]
   meetingEventId    String?    @map("meeting_event_id") @db.VarChar(255)
   meetingStatus     String?    @map("meeting_status") @db.VarChar(20) // 'SCHEDULED' | 'ACCEPTED' | 'DECLINED' | 'CANCELLED' | 'COMPLETED'
+  enrichmentData    Json?      @map("enrichment_data") @db.JsonB
+  enrichmentStatus  EnrichmentStatus? @default(PENDING) @map("enrichment_status")
+  enrichedAt        DateTime?  @map("enriched_at") @db.Timestamp()
   lastActivityAt    DateTime?  @map("last_activity_at") @db.Timestamp()
   lastEmailSentAt   DateTime?  @map("last_email_sent_at") @db.Timestamp()
   lastEmailOpenedAt DateTime?  @map("last_email_opened_at") @db.Timestamp()
@@ -587,6 +611,7 @@ model Lead {
   bookings           Booking[]
   sentEmails         SentEmail[]
   messages           Message[]
+  meetingRecordings  MeetingRecording[]
 
   @@unique([workflowId, email], map: "leads_unique_email_per_workflow")
   @@index([workflowId, status], map: "idx_leads_workflow") // TODO: Add partial index WHERE deleted_at IS NULL in migration)
@@ -715,16 +740,22 @@ model SentEmail {
   openCount            Int       @default(0) @map("open_count")
   firstOpenedAt        DateTime? @map("first_opened_at") @db.Timestamp()
   lastOpenedAt         DateTime? @map("last_opened_at") @db.Timestamp()
+  // MPP-proof tracking metrics
+  genuineOpenCount     Int       @default(0) @map("genuine_open_count")
+  botPrefetchCount     Int       @default(0) @map("bot_prefetch_count")
+  ambiguousOpenCount   Int       @default(0) @map("ambiguous_open_count")
+  directOpenCount      Int       @default(0) @map("direct_open_count")
   // Timestamps
   sentAt               DateTime  @default(now()) @map("sent_at") @db.Timestamp()
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp()
   updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp()
 
   // Relations
-  workspace          Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  lead               Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  workflowExecution  WorkflowExecution @relation(fields: [workflowExecutionId], references: [id], onDelete: Cascade)
-  workflow           Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace          Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead               Lead                   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  workflowExecution  WorkflowExecution      @relation(fields: [workflowExecutionId], references: [id], onDelete: Cascade)
+  workflow           Workflow               @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  trackingEvents     EmailTrackingEvent[]
 
   @@index([workspaceId, sentAt(sort: Desc)], map: "idx_sent_emails_workspace")
   @@index([leadId, sentAt(sort: Desc)], map: "idx_sent_emails_lead")
@@ -734,6 +765,37 @@ model SentEmail {
   @@index([openCount], map: "idx_sent_emails_open_count")
   @@index([gmailMessageId], map: "idx_sent_emails_gmail_message") // TODO: Add partial index WHERE gmail_message_id IS NOT NULL in migration
   @@map("sent_emails")
+}
+
+/// Track individual email open events with MPP classification
+model EmailTrackingEvent {
+  id                   String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sentEmailId          String                       @map("sent_email_id") @db.Uuid
+  workspaceId          String                       @map("workspace_id") @db.Uuid
+  // Temporal data
+  sentAt               DateTime                     @map("sent_at") @db.Timestamp()
+  openedAt             DateTime                     @map("opened_at") @db.Timestamp()
+  timeDeltaSeconds     Int                          @map("time_delta_seconds")
+  // Infrastructure data
+  clientIp             String                       @map("client_ip") @db.VarChar(45)
+  resolvedHostname     String?                      @map("resolved_hostname") @db.VarChar(255)
+  userAgent            String?                      @map("user_agent") @db.Text
+  // Classification
+  isAppleProxy         Boolean                      @map("is_apple_proxy")
+  classification       EmailTrackingClassification
+  // Metadata
+  metadata             Json?                        @db.JsonB
+  createdAt            DateTime                     @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  sentEmail SentEmail @relation(fields: [sentEmailId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([sentEmailId, classification], map: "idx_tracking_events_email")
+  @@index([workspaceId, openedAt(sort: Desc)], map: "idx_tracking_events_workspace")
+  @@index([classification], map: "idx_tracking_events_classification")
+  @@index([clientIp], map: "idx_tracking_events_client_ip")
+  @@map("email_tracking_events")
 }
 
 /// Store inbound and outbound email messages for Gmail Relay system
@@ -874,13 +936,14 @@ model WorkflowExecution {
   updatedAt       DateTime                @updatedAt @map("updated_at") @db.Timestamp()
 
   // Relations
-  workflow       Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  workspace      Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  lead           Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  triggerNode    WorkflowNode?   @relation(fields: [triggerNodeId], references: [id], onDelete: SetNull)
-  executionSteps ExecutionStep[]
-  executionLogs  ExecutionLog[]
-  sentEmails     SentEmail[]
+  workflow          Workflow           @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead              Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  triggerNode       WorkflowNode?      @relation(fields: [triggerNodeId], references: [id], onDelete: SetNull)
+  executionSteps    ExecutionStep[]
+  executionLogs     ExecutionLog[]
+  sentEmails        SentEmail[]
+  meetingRecordings MeetingRecording[]
 
   @@unique([workflowId, idempotencyKey], map: "workflow_executions_unique_idempotency")
   @@index([workflowId, status, createdAt(sort: Desc)], map: "idx_workflow_executions_workflow")
@@ -1250,4 +1313,126 @@ model OnboardingSession {
   @@index([workspaceId], map: "idx_onboarding_sessions_workspace")
   @@index([isComplete], map: "idx_onboarding_sessions_complete")
   @@map("onboarding_sessions")
+}
+
+// =============================================================================
+// MODULE 9: MEETING RECORDER
+// =============================================================================
+
+enum RecordingStatus {
+  RECORDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("recording_status")
+}
+
+enum SpeakerType {
+  HOST
+  GUEST
+  UNKNOWN
+
+  @@map("speaker_type")
+}
+
+/// Store meeting recordings with audio files and metadata
+model MeetingRecording {
+  id                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId           String           @map("workspace_id") @db.Uuid
+  leadId                String?          @map("lead_id") @db.Uuid
+  workflowExecutionId   String?          @map("workflow_execution_id") @db.Uuid
+  // Meeting metadata
+  meetingTitle          String?          @map("meeting_title") @db.VarChar(255)
+  meetingPlatform       String           @map("meeting_platform") @db.VarChar(20) // 'GOOGLE_MEET' | 'ZOOM' | 'TEAMS' | 'UNKNOWN'
+  meetingUrl            String?          @map("meeting_url") @db.Text
+  // Recording status
+  recordingStatus       RecordingStatus  @default(RECORDING) @map("recording_status")
+  // File storage paths (relative to storage directory)
+  stereoAudioPath       String?          @map("stereo_audio_path") @db.Text
+  monoAudioPath         String?          @map("mono_audio_path") @db.Text // Echo-reduced mono audio (new pipeline)
+  hostAudioPath         String?          @map("host_audio_path") @db.Text
+  guestAudioPath        String?          @map("guest_audio_path") @db.Text
+  eventsLogPath         String?          @map("events_log_path") @db.Text
+  // Timestamps
+  recordingStartedAt    DateTime         @map("recording_started_at") @db.Timestamp()
+  recordingEndedAt      DateTime?        @map("recording_ended_at") @db.Timestamp()
+  processingStartedAt   DateTime?        @map("processing_started_at") @db.Timestamp()
+  processingCompletedAt DateTime?        @map("processing_completed_at") @db.Timestamp()
+  // Statistics
+  durationSeconds       Int?             @map("duration_seconds")
+  fileSizeBytes         BigInt?          @map("file_size_bytes")
+  // Error tracking
+  errorMessage          String?          @map("error_message") @db.Text
+  errorDetails          Json?            @map("error_details") @db.JsonB
+  // Metadata
+  metadata              Json?            @db.JsonB
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  workspace          Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead               Lead?              @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  workflowExecution  WorkflowExecution? @relation(fields: [workflowExecutionId], references: [id], onDelete: SetNull)
+  transcriptSegments TranscriptSegment[]
+  meetingSummary     MeetingSummary?
+
+  @@index([workspaceId, recordingStatus], map: "idx_meeting_recordings_workspace")
+  @@index([leadId], map: "idx_meeting_recordings_lead")
+  @@index([recordingStartedAt(sort: Desc)], map: "idx_meeting_recordings_started")
+  @@index([recordingStatus], map: "idx_meeting_recordings_status")
+  @@map("meeting_recordings")
+}
+
+/// Store individual transcript segments with speaker information
+model TranscriptSegment {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  meetingRecordingId String           @map("meeting_recording_id") @db.Uuid
+  // Speaker information
+  speakerName        String           @map("speaker_name") @db.VarChar(150)
+  speakerType        SpeakerType      @map("speaker_type")
+  // Transcript content
+  text               String           @db.Text
+  // Timing (milliseconds)
+  startTimeMs        Int              @map("start_time_ms")
+  endTimeMs          Int              @map("end_time_ms")
+  // Confidence metrics
+  confidence         Decimal?         @db.Decimal(5, 4)
+  audioSource        String           @map("audio_source") @db.VarChar(20) // 'HOST_CHANNEL' | 'GUEST_CHANNEL'
+  // Metadata
+  metadata           Json?            @db.JsonB
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamp()
+
+  // Relations
+  meetingRecording MeetingRecording @relation(fields: [meetingRecordingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingRecordingId, startTimeMs], map: "idx_transcript_segments_meeting")
+  @@index([speakerName], map: "idx_transcript_segments_speaker")
+  @@map("transcript_segments")
+}
+
+/// Store AI-generated meeting summaries
+model MeetingSummary {
+  id                   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  meetingRecordingId   String           @unique @map("meeting_recording_id") @db.Uuid
+  // Summary content
+  summaryText          String           @map("summary_text") @db.Text
+  keyDecisions         Json?            @map("key_decisions") @db.JsonB
+  actionItems          Json?            @map("action_items") @db.JsonB
+  participants         String[]
+  topics               String[]
+  // Generation metadata
+  generatedBy          String           @map("generated_by") @db.VarChar(50) // 'OLLAMA_LLAMA3' | 'GPT4' etc
+  generationDurationMs Int?             @map("generation_duration_ms")
+  promptTokens         Int?             @map("prompt_tokens")
+  completionTokens     Int?             @map("completion_tokens")
+  // Timestamps
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamp()
+  updatedAt            DateTime         @updatedAt @map("updated_at") @db.Timestamp()
+
+  // Relations
+  meetingRecording MeetingRecording @relation(fields: [meetingRecordingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingRecordingId], map: "idx_meeting_summaries_recording")
+  @@map("meeting_summaries")
 }

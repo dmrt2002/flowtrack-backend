@@ -1,76 +1,86 @@
 import { LeadsService } from './leads.service';
 import { GetLeadsQueryDto, UpdateLeadDto, BulkUpdateLeadsDto, GetLeadMetricsQueryDto, UpdateLeadStatusDto } from './dto/leads.dto';
+import { EnrichmentQueueService } from '../enrichment/services/enrichment-queue.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 export declare class LeadsController {
     private readonly leadsService;
-    constructor(leadsService: LeadsService);
+    private readonly enrichmentQueue;
+    private readonly prisma;
+    constructor(leadsService: LeadsService, enrichmentQueue: EnrichmentQueueService, prisma: PrismaService);
     getLeads(workspaceId: string, query: GetLeadsQueryDto): Promise<{
         columns: {
             status: "EMAIL_SENT" | "FOLLOW_UP_PENDING" | "FOLLOW_UP_SENT" | "BOOKED" | "WON" | "LOST";
             leads: ({
+                _count: {
+                    bookings: number;
+                    events: number;
+                };
                 workflow: {
                     id: string;
                     name: string;
                 };
-                _count: {
-                    events: number;
-                    bookings: number;
-                };
             } & {
                 id: string;
-                workflowId: string;
                 workspaceId: string;
-                email: string;
-                name: string | null;
-                companyName: string | null;
-                phone: string | null;
-                status: import("@prisma/client").$Enums.LeadStatus;
-                source: import("@prisma/client").$Enums.LeadSource;
-                sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
-                score: number;
-                tags: string[];
-                meetingEventId: string | null;
-                meetingStatus: string | null;
-                lastActivityAt: Date | null;
-                lastEmailSentAt: Date | null;
-                lastEmailOpenedAt: Date | null;
                 deletedAt: Date | null;
                 createdAt: Date;
                 updatedAt: Date;
+                name: string | null;
+                status: import("@prisma/client").$Enums.LeadStatus;
+                tags: string[];
+                email: string;
+                workflowId: string;
+                companyName: string | null;
+                phone: string | null;
+                source: import("@prisma/client").$Enums.LeadSource;
+                sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+                score: number;
+                meetingEventId: string | null;
+                meetingStatus: string | null;
+                enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
+                enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
+                enrichedAt: Date | null;
+                lastActivityAt: Date | null;
+                lastEmailSentAt: Date | null;
+                lastEmailOpenedAt: Date | null;
             })[];
             count: number;
         }[];
         view: string;
     } | {
         leads: ({
+            _count: {
+                bookings: number;
+                events: number;
+            };
             workflow: {
                 id: string;
                 name: string;
             };
-            _count: {
-                events: number;
-                bookings: number;
-            };
         } & {
             id: string;
-            workflowId: string;
             workspaceId: string;
-            email: string;
-            name: string | null;
-            companyName: string | null;
-            phone: string | null;
-            status: import("@prisma/client").$Enums.LeadStatus;
-            source: import("@prisma/client").$Enums.LeadSource;
-            sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
-            score: number;
-            tags: string[];
-            meetingEventId: string | null;
-            meetingStatus: string | null;
-            lastActivityAt: Date | null;
-            lastEmailSentAt: Date | null;
-            lastEmailOpenedAt: Date | null;
             deletedAt: Date | null;
             createdAt: Date;
             updatedAt: Date;
+            name: string | null;
+            status: import("@prisma/client").$Enums.LeadStatus;
+            tags: string[];
+            email: string;
+            workflowId: string;
+            companyName: string | null;
+            phone: string | null;
+            source: import("@prisma/client").$Enums.LeadSource;
+            sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+            score: number;
+            meetingEventId: string | null;
+            meetingStatus: string | null;
+            enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
+            enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
+            enrichedAt: Date | null;
+            lastActivityAt: Date | null;
+            lastEmailSentAt: Date | null;
+            lastEmailOpenedAt: Date | null;
         })[];
         total: number;
         page: number;
@@ -89,45 +99,15 @@ export declare class LeadsController {
         averageScoreChange: number;
     }>;
     getLeadById(workspaceId: string, leadId: string): Promise<{
-        workflow: {
-            id: string;
-            name: string;
-        };
-        fieldData: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            leadId: string;
-            value: string;
-            formFieldId: string;
-        }[];
-        events: ({
-            triggeredBy: {
-                id: string;
-                email: string;
-                firstName: string | null;
-                lastName: string | null;
-            } | null;
-        } & {
-            id: string;
-            createdAt: Date;
-            leadId: string;
-            description: string | null;
-            metadata: import("@prisma/client/runtime/library").JsonValue | null;
-            eventType: string;
-            eventCategory: import("@prisma/client").$Enums.LeadEventCategory;
-            triggeredByWorkflowExecutionId: string | null;
-            triggeredByUserId: string | null;
-        })[];
         bookings: {
             id: string;
-            workflowId: string | null;
             workspaceId: string;
+            providerType: import("@prisma/client").$Enums.OAuthProviderType;
             createdAt: Date;
             updatedAt: Date;
-            leadId: string;
-            providerType: import("@prisma/client").$Enums.OAuthProviderType;
             responses: import("@prisma/client/runtime/library").JsonValue | null;
+            workflowId: string | null;
+            leadId: string;
             attributionMethod: import("@prisma/client").$Enums.BookingAttributionMethod | null;
             utmContent: string | null;
             hiddenFieldValue: string | null;
@@ -152,27 +132,60 @@ export declare class LeadsController {
             oauthCredentialId: string;
             rescheduledFromBookingId: string | null;
         }[];
+        workflow: {
+            id: string;
+            name: string;
+        };
+        fieldData: {
+            id: string;
+            createdAt: Date;
+            updatedAt: Date;
+            value: string;
+            leadId: string;
+            formFieldId: string;
+        }[];
+        events: ({
+            triggeredBy: {
+                id: string;
+                email: string;
+                firstName: string | null;
+                lastName: string | null;
+            } | null;
+        } & {
+            id: string;
+            metadata: import("@prisma/client/runtime/library").JsonValue | null;
+            createdAt: Date;
+            description: string | null;
+            eventType: string;
+            leadId: string;
+            eventCategory: import("@prisma/client").$Enums.LeadEventCategory;
+            triggeredByWorkflowExecutionId: string | null;
+            triggeredByUserId: string | null;
+        })[];
     } & {
         id: string;
-        workflowId: string;
         workspaceId: string;
-        email: string;
-        name: string | null;
-        companyName: string | null;
-        phone: string | null;
-        status: import("@prisma/client").$Enums.LeadStatus;
-        source: import("@prisma/client").$Enums.LeadSource;
-        sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
-        score: number;
-        tags: string[];
-        meetingEventId: string | null;
-        meetingStatus: string | null;
-        lastActivityAt: Date | null;
-        lastEmailSentAt: Date | null;
-        lastEmailOpenedAt: Date | null;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
+        status: import("@prisma/client").$Enums.LeadStatus;
+        tags: string[];
+        email: string;
+        workflowId: string;
+        companyName: string | null;
+        phone: string | null;
+        source: import("@prisma/client").$Enums.LeadSource;
+        sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        score: number;
+        meetingEventId: string | null;
+        meetingStatus: string | null;
+        enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
+        enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
+        enrichedAt: Date | null;
+        lastActivityAt: Date | null;
+        lastEmailSentAt: Date | null;
+        lastEmailOpenedAt: Date | null;
     }>;
     updateLead(workspaceId: string, leadId: string, dto: UpdateLeadDto, req: any): Promise<{
         workflow: {
@@ -183,73 +196,79 @@ export declare class LeadsController {
             id: string;
             createdAt: Date;
             updatedAt: Date;
-            leadId: string;
             value: string;
+            leadId: string;
             formFieldId: string;
         }[];
         events: {
             id: string;
-            createdAt: Date;
-            leadId: string;
-            description: string | null;
             metadata: import("@prisma/client/runtime/library").JsonValue | null;
+            createdAt: Date;
+            description: string | null;
             eventType: string;
+            leadId: string;
             eventCategory: import("@prisma/client").$Enums.LeadEventCategory;
             triggeredByWorkflowExecutionId: string | null;
             triggeredByUserId: string | null;
         }[];
     } & {
         id: string;
-        workflowId: string;
         workspaceId: string;
-        email: string;
-        name: string | null;
-        companyName: string | null;
-        phone: string | null;
-        status: import("@prisma/client").$Enums.LeadStatus;
-        source: import("@prisma/client").$Enums.LeadSource;
-        sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
-        score: number;
-        tags: string[];
-        meetingEventId: string | null;
-        meetingStatus: string | null;
-        lastActivityAt: Date | null;
-        lastEmailSentAt: Date | null;
-        lastEmailOpenedAt: Date | null;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
+        status: import("@prisma/client").$Enums.LeadStatus;
+        tags: string[];
+        email: string;
+        workflowId: string;
+        companyName: string | null;
+        phone: string | null;
+        source: import("@prisma/client").$Enums.LeadSource;
+        sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        score: number;
+        meetingEventId: string | null;
+        meetingStatus: string | null;
+        enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
+        enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
+        enrichedAt: Date | null;
+        lastActivityAt: Date | null;
+        lastEmailSentAt: Date | null;
+        lastEmailOpenedAt: Date | null;
     }>;
     updateLeadStatus(workspaceId: string, leadId: string, dto: UpdateLeadStatusDto, req: any): Promise<{
+        _count: {
+            bookings: number;
+            events: number;
+        };
         workflow: {
             id: string;
             name: string;
         };
-        _count: {
-            events: number;
-            bookings: number;
-        };
     } & {
         id: string;
-        workflowId: string;
         workspaceId: string;
-        email: string;
-        name: string | null;
-        companyName: string | null;
-        phone: string | null;
-        status: import("@prisma/client").$Enums.LeadStatus;
-        source: import("@prisma/client").$Enums.LeadSource;
-        sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
-        score: number;
-        tags: string[];
-        meetingEventId: string | null;
-        meetingStatus: string | null;
-        lastActivityAt: Date | null;
-        lastEmailSentAt: Date | null;
-        lastEmailOpenedAt: Date | null;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string | null;
+        status: import("@prisma/client").$Enums.LeadStatus;
+        tags: string[];
+        email: string;
+        workflowId: string;
+        companyName: string | null;
+        phone: string | null;
+        source: import("@prisma/client").$Enums.LeadSource;
+        sourceMetadata: import("@prisma/client/runtime/library").JsonValue | null;
+        score: number;
+        meetingEventId: string | null;
+        meetingStatus: string | null;
+        enrichmentData: import("@prisma/client/runtime/library").JsonValue | null;
+        enrichmentStatus: import("@prisma/client").$Enums.EnrichmentStatus | null;
+        enrichedAt: Date | null;
+        lastActivityAt: Date | null;
+        lastEmailSentAt: Date | null;
+        lastEmailOpenedAt: Date | null;
     }>;
     bulkUpdateLeads(workspaceId: string, dto: BulkUpdateLeadsDto, req: any): Promise<{
         success: boolean;
@@ -257,5 +276,16 @@ export declare class LeadsController {
     }>;
     deleteLead(workspaceId: string, leadId: string): Promise<{
         success: boolean;
+    }>;
+    enrichLead(workspaceId: string, leadId: string): Promise<{
+        success: boolean;
+        error: string;
+        message?: undefined;
+        leadId?: undefined;
+    } | {
+        success: boolean;
+        message: string;
+        leadId: string;
+        error?: undefined;
     }>;
 }

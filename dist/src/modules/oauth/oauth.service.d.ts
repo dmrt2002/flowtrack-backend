@@ -18,12 +18,8 @@ export declare class OAuthService {
     }>;
     saveGmailCredentials(userId: string, email: string, accessToken: string, refreshToken: string | null | undefined, expiresAt: Date | null, workspaceId?: string): Promise<{
         id: string;
-        workspaceId: string | null;
-        deletedAt: Date | null;
-        createdAt: Date;
-        updatedAt: Date;
-        isActive: boolean;
         userId: string;
+        workspaceId: string | null;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerPlan: string | null;
         providerUserId: string | null;
@@ -44,8 +40,12 @@ export declare class OAuthService {
         pollingCursor: string | null;
         apiRateLimitRemaining: number | null;
         apiRateLimitResetAt: Date | null;
+        isActive: boolean;
         lastUsedAt: Date | null;
         lastSyncedAt: Date | null;
+        deletedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     refreshAccessToken(refreshToken: string): Promise<{
         accessToken: any;
@@ -55,12 +55,8 @@ export declare class OAuthService {
         accessToken: any;
         expiresAt: Date | null;
         id: string;
-        workspaceId: string | null;
-        deletedAt: Date | null;
-        createdAt: Date;
-        updatedAt: Date;
-        isActive: boolean;
         userId: string;
+        workspaceId: string | null;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerPlan: string | null;
         providerUserId: string | null;
@@ -79,8 +75,12 @@ export declare class OAuthService {
         pollingCursor: string | null;
         apiRateLimitRemaining: number | null;
         apiRateLimitResetAt: Date | null;
+        isActive: boolean;
         lastUsedAt: Date | null;
         lastSyncedAt: Date | null;
+        deletedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     } | null>;
     getEmailProvider(workspaceId: string): Promise<{
         type: "GMAIL";
@@ -88,12 +88,8 @@ export declare class OAuthService {
             accessToken: any;
             expiresAt: Date | null;
             id: string;
-            workspaceId: string | null;
-            deletedAt: Date | null;
-            createdAt: Date;
-            updatedAt: Date;
-            isActive: boolean;
             userId: string;
+            workspaceId: string | null;
             providerType: import("@prisma/client").$Enums.OAuthProviderType;
             providerPlan: string | null;
             providerUserId: string | null;
@@ -112,8 +108,12 @@ export declare class OAuthService {
             pollingCursor: string | null;
             apiRateLimitRemaining: number | null;
             apiRateLimitResetAt: Date | null;
+            isActive: boolean;
             lastUsedAt: Date | null;
             lastSyncedAt: Date | null;
+            deletedAt: Date | null;
+            createdAt: Date;
+            updatedAt: Date;
         };
         config?: undefined;
     } | {
@@ -135,12 +135,8 @@ export declare class OAuthService {
     }>;
     saveCalendlyLink(userId: string, workspaceId: string, calendlyLink: string): Promise<{
         id: string;
-        workspaceId: string | null;
-        deletedAt: Date | null;
-        createdAt: Date;
-        updatedAt: Date;
-        isActive: boolean;
         userId: string;
+        workspaceId: string | null;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerPlan: string | null;
         providerUserId: string | null;
@@ -161,20 +157,20 @@ export declare class OAuthService {
         pollingCursor: string | null;
         apiRateLimitRemaining: number | null;
         apiRateLimitResetAt: Date | null;
+        isActive: boolean;
         lastUsedAt: Date | null;
         lastSyncedAt: Date | null;
+        deletedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     getCalendlyLink(workspaceId: string): Promise<string | null>;
     getCalendarCredentials(workspaceId: string): Promise<{
         accessToken: any;
         expiresAt: Date | null;
         id: string;
-        workspaceId: string | null;
-        deletedAt: Date | null;
-        createdAt: Date;
-        updatedAt: Date;
-        isActive: boolean;
         userId: string;
+        workspaceId: string | null;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerPlan: string | null;
         providerUserId: string | null;
@@ -193,8 +189,12 @@ export declare class OAuthService {
         pollingCursor: string | null;
         apiRateLimitRemaining: number | null;
         apiRateLimitResetAt: Date | null;
+        isActive: boolean;
         lastUsedAt: Date | null;
         lastSyncedAt: Date | null;
+        deletedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     } | null>;
     getGmailConnectionStatus(workspaceId: string): Promise<{
         connected: boolean;

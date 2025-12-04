@@ -17,10 +17,16 @@ const common_1 = require("@nestjs/common");
 const unified_auth_guard_1 = require("../../auth/guards/unified-auth.guard");
 const leads_service_1 = require("./leads.service");
 const leads_dto_1 = require("./dto/leads.dto");
+const enrichment_queue_service_1 = require("../enrichment/services/enrichment-queue.service");
+const prisma_service_1 = require("../../prisma/prisma.service");
 let LeadsController = class LeadsController {
     leadsService;
-    constructor(leadsService) {
+    enrichmentQueue;
+    prisma;
+    constructor(leadsService, enrichmentQueue, prisma) {
         this.leadsService = leadsService;
+        this.enrichmentQueue = enrichmentQueue;
+        this.prisma = prisma;
     }
     async getLeads(workspaceId, query) {
         return this.leadsService.getLeads(workspaceId, query);
@@ -42,6 +48,32 @@ let LeadsController = class LeadsController {
     }
     async deleteLead(workspaceId, leadId) {
         return this.leadsService.deleteLead(workspaceId, leadId);
+    }
+    async enrichLead(workspaceId, leadId) {
+        const lead = await this.prisma.lead.findFirst({
+            where: {
+                id: leadId,
+                workspaceId,
+            },
+        });
+        if (!lead) {
+            return {
+                success: false,
+                error: 'Lead not found',
+            };
+        }
+        await this.enrichmentQueue.enqueueEnrichment({
+            leadId: lead.id,
+            workspaceId: lead.workspaceId,
+            email: lead.email,
+            name: lead.name || undefined,
+            companyName: lead.companyName || undefined,
+        });
+        return {
+            success: true,
+            message: 'Enrichment queued',
+            leadId,
+        };
     }
 };
 exports.LeadsController = LeadsController;
@@ -106,9 +138,20 @@ __decorate([
     __metadata("design:paramtypes", [String, String]),
     __metadata("design:returntype", Promise)
 ], LeadsController.prototype, "deleteLead", null);
+__decorate([
+    (0, common_1.Post)(':leadId/enrich'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.ACCEPTED),
+    __param(0, (0, common_1.Param)('workspaceId')),
+    __param(1, (0, common_1.Param)('leadId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], LeadsController.prototype, "enrichLead", null);
 exports.LeadsController = LeadsController = __decorate([
     (0, common_1.Controller)('workspaces/:workspaceId/leads'),
     (0, common_1.UseGuards)(unified_auth_guard_1.UnifiedAuthGuard),
-    __metadata("design:paramtypes", [leads_service_1.LeadsService])
+    __metadata("design:paramtypes", [leads_service_1.LeadsService,
+        enrichment_queue_service_1.EnrichmentQueueService,
+        prisma_service_1.PrismaService])
 ], LeadsController);
 //# sourceMappingURL=leads.controller.js.map

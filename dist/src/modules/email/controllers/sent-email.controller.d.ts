@@ -8,41 +8,45 @@ export declare class SentEmailController {
         success: boolean;
         data: {
             sentEmails: ({
-                lead: {
-                    id: string;
-                    email: string;
-                    name: string | null;
-                };
                 workflow: {
                     id: string;
                     name: string;
                 };
+                lead: {
+                    id: string;
+                    name: string | null;
+                    email: string;
+                };
             } & {
                 id: string;
-                workflowId: string;
                 workspaceId: string;
+                providerType: string;
                 createdAt: Date;
                 updatedAt: Date;
-                leadId: string;
                 subject: string;
-                htmlBody: string;
-                textBody: string | null;
-                sentAt: Date;
-                providerType: string;
+                workflowId: string;
+                leadId: string;
                 workflowExecutionId: string;
                 emailType: string;
-                openCount: number;
+                sentAt: Date;
                 recipientEmail: string;
                 recipientName: string | null;
                 senderEmail: string;
                 senderName: string | null;
+                htmlBody: string;
+                textBody: string | null;
                 gmailMessageId: string | null;
                 gmailThreadId: string | null;
                 smtpMessageId: string | null;
                 deliveryStatus: string;
                 deliveryError: string | null;
+                openCount: number;
                 firstOpenedAt: Date | null;
                 lastOpenedAt: Date | null;
+                genuineOpenCount: number;
+                botPrefetchCount: number;
+                ambiguousOpenCount: number;
+                directOpenCount: number;
             })[];
             totalCount: number;
             limit: number;
@@ -64,30 +68,34 @@ export declare class SentEmailController {
                 };
             } & {
                 id: string;
-                workflowId: string;
                 workspaceId: string;
+                providerType: string;
                 createdAt: Date;
                 updatedAt: Date;
-                leadId: string;
                 subject: string;
-                htmlBody: string;
-                textBody: string | null;
-                sentAt: Date;
-                providerType: string;
+                workflowId: string;
+                leadId: string;
                 workflowExecutionId: string;
                 emailType: string;
-                openCount: number;
+                sentAt: Date;
                 recipientEmail: string;
                 recipientName: string | null;
                 senderEmail: string;
                 senderName: string | null;
+                htmlBody: string;
+                textBody: string | null;
                 gmailMessageId: string | null;
                 gmailThreadId: string | null;
                 smtpMessageId: string | null;
                 deliveryStatus: string;
                 deliveryError: string | null;
+                openCount: number;
                 firstOpenedAt: Date | null;
                 lastOpenedAt: Date | null;
+                genuineOpenCount: number;
+                botPrefetchCount: number;
+                ambiguousOpenCount: number;
+                directOpenCount: number;
             })[];
             totalCount: number;
             limit: number;
@@ -98,14 +106,14 @@ export declare class SentEmailController {
     getSentEmailById(user: any, emailId: string, workspaceId: string): Promise<{
         success: boolean;
         data: {
-            lead: {
-                id: string;
-                email: string;
-                name: string | null;
-            };
             workflow: {
                 id: string;
                 name: string;
+            };
+            lead: {
+                id: string;
+                name: string | null;
+                email: string;
             };
             workflowExecution: {
                 id: string;
@@ -113,30 +121,34 @@ export declare class SentEmailController {
             };
         } & {
             id: string;
-            workflowId: string;
             workspaceId: string;
+            providerType: string;
             createdAt: Date;
             updatedAt: Date;
-            leadId: string;
             subject: string;
-            htmlBody: string;
-            textBody: string | null;
-            sentAt: Date;
-            providerType: string;
+            workflowId: string;
+            leadId: string;
             workflowExecutionId: string;
             emailType: string;
-            openCount: number;
+            sentAt: Date;
             recipientEmail: string;
             recipientName: string | null;
             senderEmail: string;
             senderName: string | null;
+            htmlBody: string;
+            textBody: string | null;
             gmailMessageId: string | null;
             gmailThreadId: string | null;
             smtpMessageId: string | null;
             deliveryStatus: string;
             deliveryError: string | null;
+            openCount: number;
             firstOpenedAt: Date | null;
             lastOpenedAt: Date | null;
+            genuineOpenCount: number;
+            botPrefetchCount: number;
+            ambiguousOpenCount: number;
+            directOpenCount: number;
         };
     }>;
     getEmailStatistics(user: any, workspaceId: string): Promise<{

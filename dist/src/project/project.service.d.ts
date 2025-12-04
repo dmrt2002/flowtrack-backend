@@ -14,34 +14,34 @@ export declare class ProjectService {
         };
         id: string;
         workspaceId: string;
-        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
     }[]>;
     createProject(userId: string, dto: CreateProjectDto): Promise<{
         id: string;
         workspaceId: string;
-        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
     }>;
     getProjectById(userId: string, projectId: string): Promise<{
         workspace: {
             id: string;
-            name: string;
+            isActive: boolean;
             deletedAt: Date | null;
             createdAt: Date;
             updatedAt: Date;
-            settings: import("@prisma/client/runtime/library").JsonValue;
+            name: string;
             slug: string;
             intakeEmailId: string;
             ownerUserId: string;
             timezone: string;
-            isActive: boolean;
+            settings: import("@prisma/client/runtime/library").JsonValue;
         };
         tasks: {
             id: string;
@@ -56,19 +56,19 @@ export declare class ProjectService {
     } & {
         id: string;
         workspaceId: string;
-        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
     }>;
     updateProject(userId: string, projectId: string, dto: UpdateProjectDto): Promise<{
         id: string;
         workspaceId: string;
-        name: string;
         deletedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
+        name: string;
         description: string | null;
     }>;
     deleteProject(userId: string, projectId: string): Promise<{

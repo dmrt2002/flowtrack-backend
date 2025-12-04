@@ -15,6 +15,7 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const jwt_1 = require("@nestjs/jwt");
 const prisma_service_1 = require("../../../prisma/prisma.service");
+const client_1 = require("@prisma/client");
 let EmailTrackingService = EmailTrackingService_1 = class EmailTrackingService {
     jwtService;
     prisma;
@@ -84,6 +85,103 @@ let EmailTrackingService = EmailTrackingService_1 = class EmailTrackingService {
     getTrackingPixel() {
         const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
         return transparentPng;
+    }
+    async createTrackingEvent(data) {
+        try {
+            await this.prisma.emailTrackingEvent.create({
+                data: {
+                    sentEmailId: data.sentEmailId,
+                    workspaceId: data.workspaceId,
+                    sentAt: data.sentAt,
+                    openedAt: data.openedAt,
+                    timeDeltaSeconds: data.timeDeltaSeconds,
+                    clientIp: data.clientIp,
+                    resolvedHostname: data.resolvedHostname,
+                    userAgent: data.userAgent,
+                    isAppleProxy: data.isAppleProxy,
+                    classification: data.classification,
+                    metadata: data.metadata || {},
+                },
+            });
+            this.logger.log(`Tracking event created: sentEmailId=${data.sentEmailId}, classification=${data.classification}`);
+        }
+        catch (error) {
+            this.logger.error(`Failed to create tracking event: ${error.message}`, error.stack);
+            throw error;
+        }
+    }
+    async updateSentEmailCounters(sentEmailId, classification, openedAt) {
+        try {
+            const sentEmail = await this.prisma.sentEmail.findUnique({
+                where: { id: sentEmailId },
+                select: {
+                    openCount: true,
+                    firstOpenedAt: true,
+                    genuineOpenCount: true,
+                    botPrefetchCount: true,
+                    ambiguousOpenCount: true,
+                    directOpenCount: true,
+                },
+            });
+            if (!sentEmail) {
+                this.logger.warn(`SentEmail not found: ${sentEmailId}`);
+                return;
+            }
+            const updateData = {
+                openCount: { increment: 1 },
+                lastOpenedAt: openedAt,
+            };
+            if (!sentEmail.firstOpenedAt) {
+                updateData.firstOpenedAt = openedAt;
+            }
+            switch (classification) {
+                case client_1.EmailTrackingClassification.GENUINE_OPEN:
+                    updateData.genuineOpenCount = { increment: 1 };
+                    break;
+                case client_1.EmailTrackingClassification.BOT_PREFETCH:
+                    updateData.botPrefetchCount = { increment: 1 };
+                    break;
+                case client_1.EmailTrackingClassification.AMBIGUOUS:
+                    updateData.ambiguousOpenCount = { increment: 1 };
+                    break;
+                case client_1.EmailTrackingClassification.DIRECT_OPEN:
+                    updateData.directOpenCount = { increment: 1 };
+                    break;
+            }
+            await this.prisma.sentEmail.update({
+                where: { id: sentEmailId },
+                data: updateData,
+            });
+            this.logger.debug(`SentEmail counters updated: sentEmailId=${sentEmailId}, classification=${classification}`);
+        }
+        catch (error) {
+            this.logger.error(`Failed to update SentEmail counters: ${error.message}`, error.stack);
+            throw error;
+        }
+    }
+    async findSentEmailByPayload(payload) {
+        try {
+            const sentEmail = await this.prisma.sentEmail.findFirst({
+                where: {
+                    leadId: payload.leadId,
+                    workflowExecutionId: payload.workflowExecutionId,
+                    emailType: payload.emailType,
+                },
+                select: {
+                    id: true,
+                    workspaceId: true,
+                    sentAt: true,
+                },
+                orderBy: {
+                    sentAt: 'desc',
+                },
+            });
+            return sentEmail;
+        }
+        catch (error) {
+            this.logger.error(`Failed to find SentEmail: ${error.message}`, error.stack);
+            return null;
+        }
     }
 };
 exports.EmailTrackingService = EmailTrackingService;

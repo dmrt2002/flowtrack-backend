@@ -18,9 +18,9 @@ export declare const leadsListQuerySchema: z.ZodObject<{
         contacted: "contacted";
     }>>;
     sortBy: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
+        createdAt: "createdAt";
         score: "score";
         lastActivityAt: "lastActivityAt";
-        createdAt: "createdAt";
     }>>>;
     sortOrder: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
         asc: "asc";

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { WorkflowsModule } from '../workflows/workflows.module';
+import { EnrichmentModule } from '../enrichment/enrichment.module';
 
 // Services
 import { FormValidationService } from './services/form-validation.service';
@@ -16,6 +17,7 @@ import { FormEmbedController } from './controllers/form-embed.controller';
   imports: [
     PrismaModule,
     WorkflowsModule, // Import WorkflowsModule to use WorkflowQueueService
+    EnrichmentModule, // Import EnrichmentModule to use EnrichmentQueueService
     JwtModule.register({}), // Required for UnifiedAuthGuard in FormEmbedController
   ],
   controllers: [PublicFormController, FormEmbedController],

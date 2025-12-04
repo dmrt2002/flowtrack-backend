@@ -8,18 +8,23 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var FormSubmissionService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FormSubmissionService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../../prisma/prisma.service");
 const form_validation_service_1 = require("./form-validation.service");
 const client_1 = require("@prisma/client");
-let FormSubmissionService = class FormSubmissionService {
+const enrichment_queue_service_1 = require("../../enrichment/services/enrichment-queue.service");
+let FormSubmissionService = FormSubmissionService_1 = class FormSubmissionService {
     prisma;
     validationService;
-    constructor(prisma, validationService) {
+    enrichmentQueue;
+    logger = new common_1.Logger(FormSubmissionService_1.name);
+    constructor(prisma, validationService, enrichmentQueue) {
         this.prisma = prisma;
         this.validationService = validationService;
+        this.enrichmentQueue = enrichmentQueue;
     }
     async getPublicFormBySlug(workspaceSlug) {
         const workspace = await this.prisma.workspace.findUnique({
@@ -196,6 +201,19 @@ let FormSubmissionService = class FormSubmissionService {
             });
             return createdLead;
         });
+        try {
+            await this.enrichmentQueue.enqueueEnrichment({
+                leadId: lead.id,
+                workspaceId: lead.workspaceId,
+                email: lead.email,
+                name: lead.name || undefined,
+                companyName: lead.companyName || undefined,
+            });
+            this.logger.log(`Enrichment queued for lead ${lead.id}`);
+        }
+        catch (error) {
+            this.logger.error(`Failed to queue enrichment for lead ${lead.id}: ${error.message}`);
+        }
         return {
             success: true,
             leadId: lead.id,
@@ -239,9 +257,10 @@ let FormSubmissionService = class FormSubmissionService {
     }
 };
 exports.FormSubmissionService = FormSubmissionService;
-exports.FormSubmissionService = FormSubmissionService = __decorate([
+exports.FormSubmissionService = FormSubmissionService = FormSubmissionService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        form_validation_service_1.FormValidationService])
+        form_validation_service_1.FormValidationService,
+        enrichment_queue_service_1.EnrichmentQueueService])
 ], FormSubmissionService);
 //# sourceMappingURL=form-submission.service.js.map

@@ -125,18 +125,18 @@ export declare class BookingHealthController {
             };
             recentBookings: ({
                 lead: {
-                    email: string;
                     name: string | null;
+                    email: string;
                 };
             } & {
                 id: string;
-                workflowId: string | null;
                 workspaceId: string;
+                providerType: import("@prisma/client").$Enums.OAuthProviderType;
                 createdAt: Date;
                 updatedAt: Date;
-                leadId: string;
-                providerType: import("@prisma/client").$Enums.OAuthProviderType;
                 responses: import("@prisma/client/runtime/library").JsonValue | null;
+                workflowId: string | null;
+                leadId: string;
                 attributionMethod: import("@prisma/client").$Enums.BookingAttributionMethod | null;
                 utmContent: string | null;
                 hiddenFieldValue: string | null;
@@ -167,7 +167,6 @@ export declare class BookingHealthController {
         success: boolean;
         data: {
             id: string;
-            isActive: boolean;
             providerType: import("@prisma/client").$Enums.OAuthProviderType;
             providerEmail: string | null;
             webhookEnabled: boolean;
@@ -175,6 +174,7 @@ export declare class BookingHealthController {
             webhookFailedAttempts: number;
             pollingEnabled: boolean;
             pollingLastRunAt: Date | null;
+            isActive: boolean;
         }[];
     }>;
     cleanupIdempotencyKeys(): Promise<{

@@ -11,6 +11,7 @@ const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const prisma_module_1 = require("../../prisma/prisma.module");
 const workflows_module_1 = require("../workflows/workflows.module");
+const enrichment_module_1 = require("../enrichment/enrichment.module");
 const form_validation_service_1 = require("./services/form-validation.service");
 const form_submission_service_1 = require("./services/form-submission.service");
 const workflow_trigger_service_1 = require("./services/workflow-trigger.service");
@@ -24,6 +25,7 @@ exports.FormsModule = FormsModule = __decorate([
         imports: [
             prisma_module_1.PrismaModule,
             workflows_module_1.WorkflowsModule,
+            enrichment_module_1.EnrichmentModule,
             jwt_1.JwtModule.register({}),
         ],
         controllers: [public_form_controller_1.PublicFormController, form_embed_controller_1.FormEmbedController],

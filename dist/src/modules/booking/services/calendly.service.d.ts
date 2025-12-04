@@ -28,12 +28,8 @@ export declare class CalendlyService {
     } | null>;
     saveCredentials(userId: string, workspaceId: string, accessToken: string, refreshToken: string, expiresAt: Date, organization: any, owner: any, planType: string): Promise<{
         id: string;
-        workspaceId: string | null;
-        deletedAt: Date | null;
-        createdAt: Date;
-        updatedAt: Date;
-        isActive: boolean;
         userId: string;
+        workspaceId: string | null;
         providerType: import("@prisma/client").$Enums.OAuthProviderType;
         providerPlan: string | null;
         providerUserId: string | null;
@@ -54,8 +50,12 @@ export declare class CalendlyService {
         pollingCursor: string | null;
         apiRateLimitRemaining: number | null;
         apiRateLimitResetAt: Date | null;
+        isActive: boolean;
         lastUsedAt: Date | null;
         lastSyncedAt: Date | null;
+        deletedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     }>;
     processWebhookEvent(credentialId: string, signature: string, payload: any): Promise<{
         message: string;

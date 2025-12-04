@@ -1,0 +1,36 @@
+import { PrismaService } from 'src/prisma/prisma.service';
+import { EnrichmentResult } from '../types/enrichment.types';
+export declare class EnrichmentService {
+    private prisma;
+    private readonly logger;
+    constructor(prisma: PrismaService);
+    enrichLead(leadId: string, email: string, name?: string, companyName?: string): Promise<EnrichmentResult>;
+    private extractDomain;
+    private isPersonalEmailDomain;
+    private getDnsIntelligence;
+    private identifyEmailProvider;
+    private verifyEmail;
+    private isValidEmailFormat;
+    private isDisposableEmail;
+    private isRoleAccount;
+    private smtpVerify;
+    private scrapeCompanyWebsite;
+    private extractWebsiteMetadata;
+    private findSocialLink;
+    private findPersonProfile;
+    private isDomainValid;
+    private domainMatchesCompanyName;
+    private isDomainWebsiteAccessible;
+    private inferCompanyDomain;
+    private findCompanyDomainByName;
+    private detectTechStack;
+    private detectFromHeaders;
+    private detectFromMeta;
+    private detectFromScripts;
+    private detectFromCookies;
+    private detectFromUrlPatterns;
+    private detectFromDns;
+    private detectFromJsVariables;
+    private skipEnrichment;
+    reEnrichLead(leadId: string): Promise<EnrichmentResult>;
+}

@@ -29,6 +29,8 @@ const workflows_module_1 = require("./modules/workflows/workflows.module");
 const user_module_1 = require("./modules/user/user.module");
 const billing_module_1 = require("./modules/billing/billing.module");
 const email_relay_module_1 = require("./modules/email-relay/email-relay.module");
+const meeting_recorder_module_1 = require("./modules/meeting-recorder/meeting-recorder.module");
+const enrichment_module_1 = require("./modules/enrichment/enrichment.module");
 const schedule_1 = require("@nestjs/schedule");
 let AppModule = class AppModule {
 };
@@ -68,6 +70,8 @@ exports.AppModule = AppModule = __decorate([
             user_module_1.UserModule,
             billing_module_1.BillingModule,
             email_relay_module_1.EmailRelayModule,
+            meeting_recorder_module_1.MeetingRecorderModule,
+            enrichment_module_1.EnrichmentModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [app_service_1.AppService],

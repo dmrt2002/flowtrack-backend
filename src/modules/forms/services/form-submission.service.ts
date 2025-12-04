@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { FormValidationService } from './form-validation.service';
 import {
@@ -7,12 +7,16 @@ import {
 } from '../dto/form-submission.dto';
 import { PublicFormSchemaDto } from '../dto/embed-config.dto';
 import { LeadSource, WorkflowStatus, FieldType } from '@prisma/client';
+import { EnrichmentQueueService } from '../../enrichment/services/enrichment-queue.service';
 
 @Injectable()
 export class FormSubmissionService {
+  private readonly logger = new Logger(FormSubmissionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly validationService: FormValidationService,
+    private readonly enrichmentQueue: EnrichmentQueueService,
   ) {}
 
   /**
@@ -257,6 +261,21 @@ export class FormSubmissionService {
 
       return createdLead;
     });
+
+    // Trigger background enrichment for the lead
+    try {
+      await this.enrichmentQueue.enqueueEnrichment({
+        leadId: lead.id,
+        workspaceId: lead.workspaceId,
+        email: lead.email,
+        name: lead.name || undefined,
+        companyName: lead.companyName || undefined,
+      });
+      this.logger.log(`Enrichment queued for lead ${lead.id}`);
+    } catch (error) {
+      // Don't fail form submission if enrichment queueing fails
+      this.logger.error(`Failed to queue enrichment for lead ${lead.id}: ${error.message}`);
+    }
 
     return {
       success: true,

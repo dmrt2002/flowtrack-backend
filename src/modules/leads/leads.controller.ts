@@ -3,11 +3,14 @@ import {
   Get,
   Patch,
   Delete,
+  Post,
   Param,
   Query,
   Body,
   UseGuards,
   Req,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import { UnifiedAuthGuard } from '../../auth/guards/unified-auth.guard';
 import { LeadsService } from './leads.service';
@@ -18,11 +21,17 @@ import {
   GetLeadMetricsQueryDto,
   UpdateLeadStatusDto,
 } from './dto/leads.dto';
+import { EnrichmentQueueService } from '../enrichment/services/enrichment-queue.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 
 @Controller('workspaces/:workspaceId/leads')
 @UseGuards(UnifiedAuthGuard)
 export class LeadsController {
-  constructor(private readonly leadsService: LeadsService) {}
+  constructor(
+    private readonly leadsService: LeadsService,
+    private readonly enrichmentQueue: EnrichmentQueueService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   async getLeads(
@@ -88,5 +97,42 @@ export class LeadsController {
     @Param('leadId') leadId: string,
   ) {
     return this.leadsService.deleteLead(workspaceId, leadId);
+  }
+
+  @Post(':leadId/enrich')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async enrichLead(
+    @Param('workspaceId') workspaceId: string,
+    @Param('leadId') leadId: string,
+  ) {
+    // Verify lead belongs to workspace
+    const lead = await this.prisma.lead.findFirst({
+      where: {
+        id: leadId,
+        workspaceId,
+      },
+    });
+
+    if (!lead) {
+      return {
+        success: false,
+        error: 'Lead not found',
+      };
+    }
+
+    // Enqueue enrichment job
+    await this.enrichmentQueue.enqueueEnrichment({
+      leadId: lead.id,
+      workspaceId: lead.workspaceId,
+      email: lead.email,
+      name: lead.name || undefined,
+      companyName: lead.companyName || undefined,
+    });
+
+    return {
+      success: true,
+      message: 'Enrichment queued',
+      leadId,
+    };
   }
 }
